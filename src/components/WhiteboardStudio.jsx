@@ -51,6 +51,8 @@ export default function WhiteboardStudio({
   const [selectedPack, setSelectedPack] = useState(0)
   const [selectedSticker, setSelectedSticker] = useState(stickerPacks[0].stickers[0])
   const [stampText, setStampText] = useState('Thinking of you')
+  const [feedback, setFeedback] = useState('')
+  const [error, setError] = useState('')
 
   const canvasBackground = theme === 'sender' ? '#fffafc' : '#fbf8ff'
   const activeStickers = stickerPacks[selectedPack].stickers
@@ -315,21 +317,35 @@ export default function WhiteboardStudio({
     setDrawingSnapshot(previousSnapshot)
   }
 
-  function handleSaveWhiteboard() {
-    saveWhiteboardData({ drawing: drawingSnapshot })
+  async function handleSaveWhiteboard() {
+    try {
+      await saveWhiteboardData({ drawing: drawingSnapshot })
+      setError('')
+      setFeedback(savedMessage)
+    } catch (saveError) {
+      setFeedback('')
+      setError(saveError.message)
+    }
   }
 
-  function handleSendWhiteboard() {
+  async function handleSendWhiteboard() {
     const senderRole = currentUser?.role || (theme === 'sender' ? 'pinky' : 'japu')
     const senderName = currentUser?.name || (theme === 'sender' ? 'Pinky' : 'Japu')
 
-    saveWhiteboardData({
-      drawing: drawingSnapshot,
-      lastSentAt: new Date().toISOString(),
-      lastSentBy: senderRole,
-      lastSentByName: senderName,
-      sendCount: (whiteboardData.sendCount || 0) + 1,
-    })
+    try {
+      await saveWhiteboardData({
+        drawing: drawingSnapshot,
+        lastSentAt: new Date().toISOString(),
+        lastSentBy: senderRole,
+        lastSentByName: senderName,
+        sendCount: (whiteboardData.sendCount || 0) + 1,
+      })
+      setError('')
+      setFeedback(sentMessage)
+    } catch (sendError) {
+      setFeedback('')
+      setError(sendError.message)
+    }
   }
 
   function renderPanel() {
@@ -515,13 +531,16 @@ export default function WhiteboardStudio({
         <button className="secondary-button" onClick={clearCanvas}>
           Clear
         </button>
-        <button className="secondary-button" onClick={handleSaveWhiteboard}>
+        <button className="secondary-button" onClick={() => void handleSaveWhiteboard()}>
           {saveLabel}
         </button>
-        <button className="primary-button" onClick={handleSendWhiteboard}>
+        <button className="primary-button" onClick={() => void handleSendWhiteboard()}>
           {sendLabel}
         </button>
       </div>
+
+      {feedback ? <p className="form-info">{feedback}</p> : null}
+      {error ? <p className="form-error">{error}</p> : null}
     </div>
   )
 

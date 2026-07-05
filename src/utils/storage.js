@@ -67,6 +67,11 @@ const storeState = {
   messages: [],
   whiteboardData: defaultWhiteboardState,
   reminderHistory: [],
+  syncState: {
+    messages: null,
+    reminders: null,
+    whiteboard: null,
+  },
   appSettings: {
     pinky: { ...defaultSettings },
     japu: { ...defaultSettings },
@@ -74,7 +79,7 @@ const storeState = {
 }
 
 const storeSubscribers = new Map(
-  ['currentUser', 'reminders', 'messages', 'whiteboardData', 'reminderHistory', 'appSettings'].map((key) => [
+  ['currentUser', 'reminders', 'messages', 'whiteboardData', 'reminderHistory', 'syncState', 'appSettings'].map((key) => [
     key,
     new Set(),
   ]),
@@ -126,6 +131,25 @@ function setStoreValue(key, value, emit = true) {
   if (emit) {
     emitStoreUpdate(key)
   }
+}
+
+function getFriendlyFirestoreMessage(error, fallbackMessage) {
+  if (error?.code === 'permission-denied') {
+    return 'Firebase permissions are blocking live sync. Publish the Firestore rules for this app to restore shared updates.'
+  }
+
+  if (error?.code === 'unavailable') {
+    return 'Live sync is temporarily unavailable. Check the internet connection and try again.'
+  }
+
+  return fallbackMessage
+}
+
+function updateSyncState(channel, message) {
+  setStoreValue('syncState', {
+    ...storeState.syncState,
+    [channel]: message,
+  })
 }
 
 function useStoreValue(key) {
@@ -312,6 +336,9 @@ function startRealtimeSubscriptions() {
   messagesUnsubscribe = onSnapshot(messagesRef, (snapshot) => {
     const messages = snapshot.docs.map((messageDoc) => normalizeMessage(messageDoc.data(), messageDoc.id))
     setStoreValue('messages', messages)
+    updateSyncState('messages', null)
+  }, (error) => {
+    updateSyncState('messages', getFriendlyFirestoreMessage(error, 'Messages could not sync right now.'))
   })
 
   const remindersRef = query(collection(db, 'rooms', roomId, 'reminders'), orderBy('createdAt', 'asc'))
@@ -319,16 +346,23 @@ function startRealtimeSubscriptions() {
     const reminders = snapshot.docs.map((reminderDoc) => normalizeReminder(reminderDoc.data(), reminderDoc.id))
     setStoreValue('reminders', reminders)
     setStoreValue('reminderHistory', buildReminderHistory(reminders))
+    updateSyncState('reminders', null)
+  }, (error) => {
+    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminders could not sync right now.'))
   })
 
   const whiteboardRef = doc(db, 'rooms', roomId, 'whiteboard', 'current')
   whiteboardUnsubscribe = onSnapshot(whiteboardRef, (snapshot) => {
     if (!snapshot.exists()) {
       setStoreValue('whiteboardData', defaultWhiteboardState)
+      updateSyncState('whiteboard', null)
       return
     }
 
     setStoreValue('whiteboardData', normalizeWhiteboardData(snapshot.data()))
+    updateSyncState('whiteboard', null)
+  }, (error) => {
+    updateSyncState('whiteboard', getFriendlyFirestoreMessage(error, 'Whiteboard sync is currently unavailable.'))
   })
 }
 
@@ -423,17 +457,22 @@ export function getReminders() {
 export async function addReminder(reminder) {
   const remindersCollection = collection(db, 'rooms', roomId, 'reminders')
 
-  await addDoc(remindersCollection, {
-    title: String(reminder.title || '').trim(),
-    timeValue: reminder.timeValue || '',
-    time: reminder.time || formatReminderTime(reminder.timeValue),
-    note: String(reminder.note || '').trim(),
-    active: reminder.active !== false,
-    status: 'pending',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    takenAt: null,
-  })
+  try {
+    await addDoc(remindersCollection, {
+      title: String(reminder.title || '').trim(),
+      timeValue: reminder.timeValue || '',
+      time: reminder.time || formatReminderTime(reminder.timeValue),
+      note: String(reminder.note || '').trim(),
+      active: reminder.active !== false,
+      status: 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      takenAt: null,
+    })
+  } catch (error) {
+    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder save failed.'))
+    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder save failed.'))
+  }
 }
 
 export async function updateReminder(reminderId, patch) {
@@ -466,30 +505,50 @@ export async function updateReminder(reminderId, patch) {
     payload.takenAt = patch.takenAt
   }
 
-  await updateDoc(reminderRef, payload)
+  try {
+    await updateDoc(reminderRef, payload)
+  } catch (error) {
+    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder update failed.'))
+    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder update failed.'))
+  }
 }
 
 export async function deleteReminder(reminderId) {
-  await deleteDoc(doc(db, 'rooms', roomId, 'reminders', reminderId))
+  try {
+    await deleteDoc(doc(db, 'rooms', roomId, 'reminders', reminderId))
+  } catch (error) {
+    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder delete failed.'))
+    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder delete failed.'))
+  }
 }
 
 export async function markReminderStatus(reminder, status = 'Taken') {
   const reminderRef = doc(db, 'rooms', roomId, 'reminders', reminder.id)
 
   if (status === 'Taken') {
-    await updateDoc(reminderRef, {
-      status: 'taken',
-      takenAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
+    try {
+      await updateDoc(reminderRef, {
+        status: 'taken',
+        takenAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    } catch (error) {
+      updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
+      throw new Error(getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
+    }
     return
   }
 
-  await updateDoc(reminderRef, {
-    status: 'pending',
-    takenAt: null,
-    updatedAt: serverTimestamp(),
-  })
+  try {
+    await updateDoc(reminderRef, {
+      status: 'pending',
+      takenAt: null,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (error) {
+    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
+    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
+  }
 }
 
 export function getMessages() {
@@ -503,12 +562,17 @@ export async function sendMessage({ text, senderRole, senderName }) {
     return
   }
 
-  await addDoc(collection(db, 'rooms', roomId, 'messages'), {
-    text: trimmedText,
-    senderRole,
-    senderName,
-    createdAt: serverTimestamp(),
-  })
+  try {
+    await addDoc(collection(db, 'rooms', roomId, 'messages'), {
+      text: trimmedText,
+      senderRole,
+      senderName,
+      createdAt: serverTimestamp(),
+    })
+  } catch (error) {
+    updateSyncState('messages', getFriendlyFirestoreMessage(error, 'Message send failed.'))
+    throw new Error(getFriendlyFirestoreMessage(error, 'Message send failed.'))
+  }
 }
 
 export function getWhiteboardData() {
@@ -533,7 +597,12 @@ export async function saveWhiteboardData(data) {
     payload.sendCount = Number(data.sendCount || storeState.whiteboardData.sendCount || 0)
   }
 
-  await setDoc(whiteboardRef, payload, { merge: true })
+  try {
+    await setDoc(whiteboardRef, payload, { merge: true })
+  } catch (error) {
+    updateSyncState('whiteboard', getFriendlyFirestoreMessage(error, 'Whiteboard save failed.'))
+    throw new Error(getFriendlyFirestoreMessage(error, 'Whiteboard save failed.'))
+  }
 }
 
 export function getReminderHistory() {
@@ -577,6 +646,10 @@ export function useWhiteboardData() {
 
 export function useReminderHistory() {
   return useStoreValue('reminderHistory')
+}
+
+export function useSyncState() {
+  return useStoreValue('syncState')
 }
 
 export function useSettings(role) {

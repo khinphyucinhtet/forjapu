@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import MenuDrawer from './MenuDrawer'
+import { useSyncState } from '../utils/storage'
 
 export default function AppHeader({ badge, title, subtitle, action, theme = 'receiver' }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const location = useLocation()
+  const syncState = useSyncState()
+  const syncMessage = syncState.messages || syncState.reminders || syncState.whiteboard
 
   useEffect(() => {
     setIsMenuOpen(false)
@@ -32,6 +35,7 @@ export default function AppHeader({ badge, title, subtitle, action, theme = 'rec
           {badge ? <span className="header-badge">{badge}</span> : null}
           <h1>{title}</h1>
           {subtitle ? <p>{subtitle}</p> : null}
+          {syncMessage ? <div className="sync-banner">{syncMessage}</div> : null}
         </div>
 
         <div className="header-controls">

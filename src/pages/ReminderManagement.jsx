@@ -29,7 +29,7 @@ export default function ReminderManagement() {
     setDraft((current) => ({ ...current, [name]: value }))
   }
 
-  function handleSaveReminder(event) {
+  async function handleSaveReminder(event) {
     event.preventDefault()
 
     if (!draft.title.trim() || !draft.time.trim()) {
@@ -45,15 +45,19 @@ export default function ReminderManagement() {
       active: draft.active,
     }
 
-    if (editingId) {
-      updateReminder(editingId, payload)
-    } else {
-      addReminder(payload)
-    }
+    try {
+      if (editingId) {
+        await updateReminder(editingId, payload)
+      } else {
+        await addReminder(payload)
+      }
 
-    setEditingId(null)
-    setDraft(emptyDraft)
-    setError('')
+      setEditingId(null)
+      setDraft(emptyDraft)
+      setError('')
+    } catch (saveError) {
+      setError(saveError.message)
+    }
   }
 
   function handleEditReminder(reminder) {
@@ -71,6 +75,24 @@ export default function ReminderManagement() {
     setEditingId(null)
     setDraft(emptyDraft)
     setError('')
+  }
+
+  async function handleToggleReminder(reminder) {
+    try {
+      await updateReminder(reminder.id, { active: !reminder.active })
+      setError('')
+    } catch (toggleError) {
+      setError(toggleError.message)
+    }
+  }
+
+  async function handleDeleteReminder(reminderId) {
+    try {
+      await deleteReminder(reminderId)
+      setError('')
+    } catch (deleteError) {
+      setError(deleteError.message)
+    }
   }
 
   return (
@@ -140,9 +162,9 @@ export default function ReminderManagement() {
               key={reminder.id}
               reminder={reminder}
               note={reminder.note}
-              onToggle={() => updateReminder(reminder.id, { active: !reminder.active })}
+              onToggle={() => void handleToggleReminder(reminder)}
               onEdit={() => handleEditReminder(reminder)}
-              onDelete={() => deleteReminder(reminder.id)}
+              onDelete={() => void handleDeleteReminder(reminder.id)}
             />
           ))}
         </main>

@@ -10,47 +10,64 @@ export default function JapuHome() {
   const settings = useSettings()
   const nextReminder = reminders.find((reminder) => reminder.active) || reminders[0]
   const [dialog, setDialog] = useState(null)
+  const [error, setError] = useState('')
 
-  function handleMarkTaken() {
+  async function handleMarkTaken() {
     if (!nextReminder) {
       return
     }
 
     if (!settings.reminderCheckIn) {
-      markReminderStatus(nextReminder, 'Taken')
-      setDialog({
-        type: 'success',
-        title: 'Taw Tal Taw Tal',
-        message: `${nextReminder.title} was marked as taken.`,
-      })
+      try {
+        await markReminderStatus(nextReminder, 'Taken')
+        setError('')
+        setDialog({
+          type: 'success',
+          title: 'Taw Tal Taw Tal',
+          message: `${nextReminder.title} was marked as taken.`,
+        })
+      } catch (statusError) {
+        setError(statusError.message)
+      }
       return
     }
 
+    setError('')
     setDialog({ type: 'confirm' })
   }
 
-  function handleReminderDecision(decision) {
+  async function handleReminderDecision(decision) {
     if (!nextReminder) {
       setDialog(null)
       return
     }
 
     if (decision === 'yes') {
-      markReminderStatus(nextReminder, 'Taken')
-      setDialog({
-        type: 'success',
-        title: 'Taw Tal Taw Tal',
-        message: `${nextReminder.title} was marked as taken.`,
-      })
+      try {
+        await markReminderStatus(nextReminder, 'Taken')
+        setError('')
+        setDialog({
+          type: 'success',
+          title: 'Taw Tal Taw Tal',
+          message: `${nextReminder.title} was marked as taken.`,
+        })
+      } catch (statusError) {
+        setError(statusError.message)
+      }
       return
     }
 
-    markReminderStatus(nextReminder, 'Pending')
-    setDialog({
-      type: 'warning',
-      title: 'Drink Drink You Stupid',
-      message: `${nextReminder.title} is still waiting for you.`,
-    })
+    try {
+      await markReminderStatus(nextReminder, 'Pending')
+      setError('')
+      setDialog({
+        type: 'warning',
+        title: 'Drink Drink You Stupid',
+        message: `${nextReminder.title} is still waiting for you.`,
+      })
+    } catch (statusError) {
+      setError(statusError.message)
+    }
   }
 
   return (
@@ -81,10 +98,11 @@ export default function JapuHome() {
               </div>
               <span className="overview-icon receiver">⌁</span>
             </div>
-            <button className="primary-button full-width" onClick={handleMarkTaken} disabled={!nextReminder}>
+            <button className="primary-button full-width" onClick={() => void handleMarkTaken()} disabled={!nextReminder}>
               Mark as taken
             </button>
           </section>
+          {error ? <p className="form-error">{error}</p> : null}
         </main>
 
         <BottomNav items={receiverNavItems} />
@@ -100,10 +118,10 @@ export default function JapuHome() {
                   <p>Did you take {nextReminder?.title || 'your reminder'}?</p>
                 </div>
                 <div className="modal-actions modal-actions-split">
-                  <button className="ghost-button" onClick={() => handleReminderDecision('no')}>
+                  <button className="ghost-button" onClick={() => void handleReminderDecision('no')}>
                     No
                   </button>
-                  <button className="primary-button" onClick={() => handleReminderDecision('yes')}>
+                  <button className="primary-button" onClick={() => void handleReminderDecision('yes')}>
                     Yes
                   </button>
                 </div>

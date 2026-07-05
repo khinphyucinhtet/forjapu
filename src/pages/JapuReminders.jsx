@@ -7,8 +7,8 @@ import { updateReminder, useReminders } from '../utils/storage'
 export default function JapuReminders() {
   const reminders = useReminders()
 
-  function toggleReminder(reminder) {
-    updateReminder(reminder.id, { active: !reminder.active })
+  async function toggleReminder(reminder) {
+    await updateReminder(reminder.id, { active: !reminder.active })
   }
 
   return (
@@ -21,7 +21,7 @@ export default function JapuReminders() {
             <ReminderCard
               key={reminder.id}
               reminder={reminder}
-              onToggle={() => toggleReminder(reminder)}
+              onToggle={() => void toggleReminder(reminder)}
             />
           ))}
         </main>
