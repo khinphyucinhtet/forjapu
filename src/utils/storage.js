@@ -249,7 +249,17 @@ function syncUserIntoLocalState(user, password) {
     : [...existingUsers, { ...user, ...(password ? { password } : {}) }]
 
   setStoreValue('users', updatedUsers, { persistLocal: true, emit: true })
-  setCurrentUser({ ...getCurrentUser(), ...user })
+  setCurrentUser({ ...(getCurrentUser() || {}), ...user })
+}
+
+function findLocalUserByIdentifier(identifier) {
+  const normalizedUsername = normalizeUsername(identifier)
+  const normalizedEmail = normalizeEmail(identifier)
+
+  return getUsers().find(
+    (candidate) =>
+      candidate.username === normalizedUsername || candidate.email === normalizedEmail,
+  )
 }
 
 function syncSharedDataToStore(sharedData) {
@@ -395,6 +405,12 @@ async function resolveFirebaseLoginEmail(identifier) {
     return normalizedEmail
   }
 
+  const localUser = findLocalUserByIdentifier(identifier)
+
+  if (localUser?.email) {
+    return normalizeEmail(localUser.email)
+  }
+
   try {
     const profile = await findFirebaseProfileByUsername(identifier)
 
@@ -423,7 +439,7 @@ async function buildCurrentUserFromFirebase(firebaseUser, fallbackRole = 'japu')
     authProvider: 'firebase',
   }
 
-  setCurrentUser(currentUser)
+  syncUserIntoLocalState(currentUser)
   ensureRealtimeSubscriptions()
   return currentUser
 }
