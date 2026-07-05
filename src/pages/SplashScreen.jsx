@@ -22,7 +22,6 @@ export default function SplashScreen() {
         <div className="splash-copy">
           <h1 className="splash-wordmark">ForJapu</h1>
           <div className="splash-love-note">
-            <h2>For Japu</h2>
             <p>Japu yay d nae lal sayy tout pr</p>
             <p>S pyinn m htuu nah</p>
             <p>lain mr ml nor</p>

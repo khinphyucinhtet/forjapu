@@ -741,7 +741,7 @@
 
 .whiteboard-toolbar {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.6rem;
   padding: 0.85rem;
   border-radius: 20px;
@@ -752,10 +752,11 @@
 
 .toolbar-button {
   font-weight: 800;
-  gap: 0.35rem;
+  gap: 0;
   min-width: 0;
-  padding-inline: 0.65rem;
-  font-size: 0.94rem;
+  min-height: 3.1rem;
+  padding-inline: 0;
+  font-size: 1.08rem;
 }
 
 .whiteboard-popover {
@@ -1377,11 +1378,6 @@
   text-align: center;
 }
 
-.splash-love-note h2 {
-  font-size: 1.15rem;
-  font-weight: 800;
-}
-
 .splash-love-note p {
   margin: 0;
   line-height: 1.6;
@@ -1412,6 +1408,28 @@
   font-size: 1.35rem;
 }
 
+@media (max-width: 640px) {
+  .page-shell {
+    padding: 0;
+    background: #fff;
+  }
+
+  .phone-shell {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .menu-drawer-shell {
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
+  }
+}
+
 @media (max-width: 420px) {
   .field-grid {
     grid-template-columns: 1fr;
@@ -1422,14 +1440,13 @@
   }
 
   .phone-shell {
-    height: calc(100dvh - 1.5rem);
-    border-radius: 28px;
+    height: 100dvh;
   }
 
   .menu-drawer-shell {
-    width: calc(100vw - 1.5rem);
-    height: calc(100dvh - 1.5rem);
-    margin: 0.75rem auto;
+    width: 100vw;
+    height: 100dvh;
+    margin: 0;
   }
 
   .menu-drawer-panel {
@@ -1452,5 +1469,4 @@
   .dashboard-donut-layout {
     grid-template-columns: 1fr;
   }
-
 }

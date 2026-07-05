@@ -66,7 +66,7 @@ export default function WhiteboardStudio({
   }, [])
 
   function getToolPanel(currentTool) {
-    if (currentTool === 'draw') {
+    if (currentTool === 'draw' || currentTool === 'eraser') {
       return 'brush'
     }
 
@@ -202,7 +202,7 @@ export default function WhiteboardStudio({
   }
 
   function startDrawing(event) {
-    if (tool !== 'draw') {
+    if (tool !== 'draw' && tool !== 'eraser') {
       return
     }
 
@@ -212,13 +212,14 @@ export default function WhiteboardStudio({
     isDrawingRef.current = true
     context.beginPath()
     context.moveTo(x, y)
-    context.strokeStyle = color
+    context.globalCompositeOperation = tool === 'eraser' ? 'destination-out' : 'source-over'
+    context.strokeStyle = tool === 'eraser' ? 'rgba(0,0,0,1)' : color
     context.lineWidth = brushSize
     event.preventDefault()
   }
 
   function draw(event) {
-    if (!isDrawingRef.current || tool !== 'draw') {
+    if (!isDrawingRef.current || (tool !== 'draw' && tool !== 'eraser')) {
       return
     }
 
@@ -236,6 +237,8 @@ export default function WhiteboardStudio({
     }
 
     isDrawingRef.current = false
+    const context = canvasRef.current.getContext('2d')
+    context.globalCompositeOperation = 'source-over'
     commitCanvas()
   }
 
@@ -456,36 +459,50 @@ export default function WhiteboardStudio({
       <div className="whiteboard-toolbar">
         <button
           className={`toolbar-button ${tool === 'draw' ? 'active' : ''}`}
+          aria-label="Brush"
           onClick={() => {
             setTool('draw')
             setActivePanel('brush')
           }}
         >
-          ✎ Brush
+          ✎
         </button>
         <button
           className={`toolbar-button ${tool === 'text' ? 'active' : ''}`}
+          aria-label="Text"
           onClick={() => {
             setTool('text')
             setActivePanel('text')
           }}
         >
-          Text
+          T
         </button>
         <button
           className={`toolbar-button ${tool === 'sticker' ? 'active' : ''}`}
+          aria-label="Sticker"
           onClick={() => {
             setTool('sticker')
             setActivePanel('stickers')
           }}
         >
-          ✨ Sticker
+          ✨
         </button>
         <button
           className={`toolbar-button ${activePanel === 'color' ? 'active' : ''}`}
+          aria-label="Color"
           onClick={() => setActivePanel(activePanel === 'color' ? getToolPanel(tool) : 'color')}
         >
-          🖍 Color
+          🖍
+        </button>
+        <button
+          className={`toolbar-button ${tool === 'eraser' ? 'active' : ''}`}
+          aria-label="Eraser"
+          onClick={() => {
+            setTool('eraser')
+            setActivePanel('brush')
+          }}
+        >
+          ⌫
         </button>
       </div>
 

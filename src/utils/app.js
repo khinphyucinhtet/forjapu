@@ -28,3 +28,49 @@ export function formatTinyTime(dateString) {
     minute: '2-digit',
   }).format(new Date(dateString))
 }
+
+export function formatReminderTime(timeValue) {
+  if (!timeValue) {
+    return ''
+  }
+
+  const [hoursText = '0', minutesText = '0'] = String(timeValue).split(':')
+  const hours = Number(hoursText)
+  const minutes = Number(minutesText)
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return String(timeValue)
+  }
+
+  return new Intl.DateTimeFormat('en', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(2026, 0, 1, hours, minutes))
+}
+
+export function toReminderTimeValue(reminder) {
+  if (reminder?.timeValue) {
+    return reminder.timeValue
+  }
+
+  const displayTime = String(reminder?.time || '').trim()
+  const timeMatch = displayTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+
+  if (!timeMatch) {
+    return ''
+  }
+
+  let hours = Number(timeMatch[1])
+  const minutes = timeMatch[2]
+  const meridiem = timeMatch[3].toUpperCase()
+
+  if (meridiem === 'PM' && hours !== 12) {
+    hours += 12
+  }
+
+  if (meridiem === 'AM' && hours === 12) {
+    hours = 0
+  }
+
+  return `${String(hours).padStart(2, '0')}:${minutes}`
+}

@@ -1,12 +1,15 @@
 import { useSyncExternalStore } from 'react'
 import {
   defaultHistory,
+  legacySampleHistory,
   defaultMessages,
   defaultReminders,
   defaultSettings,
   defaultUsers,
   defaultWhiteboard,
+  legacySampleReminders,
 } from './mockData'
+import { formatReminderTime, toReminderTimeValue } from './app'
 import { auth, db, isFirebaseConfigured } from './firebase'
 import {
   createUserWithEmailAndPassword,
@@ -112,6 +115,55 @@ function normalizeLocalUser(user) {
   }
 }
 
+function normalizeReminder(reminder) {
+  const timeValue = toReminderTimeValue(reminder)
+
+  return {
+    ...reminder,
+    timeValue,
+    time: reminder?.time || formatReminderTime(timeValue),
+    active: reminder?.active !== false,
+  }
+}
+
+function isLegacyReminderSeed(reminders) {
+  return (
+    Array.isArray(reminders) &&
+    reminders.length === legacySampleReminders.length &&
+    reminders.every((reminder, index) => {
+      const sample = legacySampleReminders[index]
+      return reminder?.title === sample.title && reminder?.time === sample.time
+    })
+  )
+}
+
+function isLegacyHistorySeed(history) {
+  return (
+    Array.isArray(history) &&
+    history.length === legacySampleHistory.length &&
+    history.every((entry, index) => {
+      const sample = legacySampleHistory[index]
+      return entry?.title === sample.title && entry?.time === sample.time && entry?.status === sample.status
+    })
+  )
+}
+
+function normalizeReminderCollection(reminders) {
+  if (!Array.isArray(reminders) || isLegacyReminderSeed(reminders)) {
+    return []
+  }
+
+  return reminders.map(normalizeReminder)
+}
+
+function normalizeHistoryCollection(history) {
+  if (!Array.isArray(history) || isLegacyHistorySeed(history)) {
+    return []
+  }
+
+  return history
+}
+
 const storeKeyMap = {
   currentUser: storageKeys.currentUser,
   users: storageKeys.users,
@@ -161,13 +213,13 @@ function buildInitialStoreState() {
   return {
     currentUser: readJson(storageKeys.currentUser, null),
     users: readJson(storageKeys.users, defaultUsers).map(normalizeLocalUser),
-    reminders: readJson(storageKeys.reminders, defaultReminders),
+    reminders: normalizeReminderCollection(readJson(storageKeys.reminders, defaultReminders)),
     messages: readJson(storageKeys.messages, defaultMessages),
     whiteboardData: {
       ...defaultWhiteboard,
       ...readJson(storageKeys.whiteboardData, defaultWhiteboard),
     },
-    reminderHistory: readJson(storageKeys.reminderHistory, defaultHistory),
+    reminderHistory: normalizeHistoryCollection(readJson(storageKeys.reminderHistory, defaultHistory)),
     appSettings: normalizeSettingsState(readJson(storageKeys.appSettings, createDefaultSettingsState())),
   }
 }
@@ -217,13 +269,13 @@ function useStoreValue(key) {
 
 function normalizeSharedData(data = {}) {
   return {
-    reminders: Array.isArray(data.reminders) ? data.reminders : storeState.reminders,
+    reminders: normalizeReminderCollection(data.reminders ?? storeState.reminders),
     messages: Array.isArray(data.messages) ? data.messages : storeState.messages,
     whiteboardData: {
       ...defaultWhiteboard,
       ...(data.whiteboardData && typeof data.whiteboardData === 'object' ? data.whiteboardData : storeState.whiteboardData),
     },
-    reminderHistory: Array.isArray(data.reminderHistory) ? data.reminderHistory : storeState.reminderHistory,
+    reminderHistory: normalizeHistoryCollection(data.reminderHistory ?? storeState.reminderHistory),
     appSettings: normalizeSettingsState(data.appSettings ?? storeState.appSettings),
   }
 }
@@ -452,7 +504,9 @@ export function initializeMockData() {
   setStoreValue('users', users, { persistLocal: true, emit: false })
   setStoreValue(
     'reminders',
-    getStore().getItem(storageKeys.reminders) ? readJson(storageKeys.reminders, defaultReminders) : defaultReminders,
+    normalizeReminderCollection(
+      getStore().getItem(storageKeys.reminders) ? readJson(storageKeys.reminders, defaultReminders) : defaultReminders,
+    ),
     { persistLocal: true, emit: false },
   )
   setStoreValue(
@@ -472,9 +526,11 @@ export function initializeMockData() {
   )
   setStoreValue(
     'reminderHistory',
-    getStore().getItem(storageKeys.reminderHistory)
-      ? readJson(storageKeys.reminderHistory, defaultHistory)
-      : defaultHistory,
+    normalizeHistoryCollection(
+      getStore().getItem(storageKeys.reminderHistory)
+        ? readJson(storageKeys.reminderHistory, defaultHistory)
+        : defaultHistory,
+    ),
     { persistLocal: true, emit: false },
   )
   setStoreValue(
@@ -774,19 +830,20 @@ export function getReminders() {
 }
 
 export function saveReminders(reminders) {
-  void persistSharedSlice('reminders', reminders)
-  return reminders
+  const normalizedReminders = normalizeReminderCollection(reminders)
+  void persistSharedSlice('reminders', normalizedReminders)
+  return normalizedReminders
 }
 
 export function addReminder(reminder) {
-  const updatedReminders = [...getReminders(), { id: makeId('rem'), active: true, ...reminder }]
+  const updatedReminders = [...getReminders(), normalizeReminder({ id: makeId('rem'), active: true, ...reminder })]
   saveReminders(updatedReminders)
   return updatedReminders
 }
 
 export function updateReminder(reminderId, patch) {
   const updatedReminders = getReminders().map((reminder) =>
-    reminder.id === reminderId ? { ...reminder, ...patch } : reminder,
+    reminder.id === reminderId ? normalizeReminder({ ...reminder, ...patch }) : reminder,
   )
   saveReminders(updatedReminders)
   return updatedReminders

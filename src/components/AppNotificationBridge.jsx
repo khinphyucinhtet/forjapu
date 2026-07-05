@@ -1,14 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { showAppNotification } from '../utils/notifications'
+import { toReminderTimeValue } from '../utils/app'
 import { useCurrentUser, useReminders, useSettings, useWhiteboardData } from '../utils/storage'
-
-function makeReminderFingerprint(reminder) {
-  if (!reminder?.active) {
-    return ''
-  }
-
-  return `${reminder.id}:${reminder.time}:${reminder.title}:${reminder.active}`
-}
 
 function makeBoardFingerprint(whiteboardData) {
   if (!whiteboardData?.lastSentAt) {
@@ -23,7 +16,7 @@ export default function AppNotificationBridge() {
   const reminders = useReminders()
   const settings = useSettings()
   const whiteboardData = useWhiteboardData()
-  const reminderNoticeRef = useRef('')
+  const reminderNoticeRef = useRef(new Set())
   const boardNoticeRef = useRef('')
 
   useEffect(() => {
@@ -31,21 +24,40 @@ export default function AppNotificationBridge() {
       return
     }
 
-    const activeReminder = reminders.find((reminder) => reminder.active)
-    const fingerprint = makeReminderFingerprint(activeReminder)
+    function checkReminderTimes() {
+      const now = new Date()
+      const todayKey = now.toISOString().slice(0, 10)
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
 
-    if (!fingerprint || reminderNoticeRef.current === fingerprint) {
-      return
+      reminders
+        .filter((reminder) => reminder.active)
+        .forEach((reminder) => {
+          const reminderTimeValue = toReminderTimeValue(reminder)
+
+          if (!reminderTimeValue || reminderTimeValue !== currentTime) {
+            return
+          }
+
+          const fingerprint = `${reminder.id}:${todayKey}:${reminderTimeValue}`
+
+          if (reminderNoticeRef.current.has(fingerprint)) {
+            return
+          }
+
+          reminderNoticeRef.current.add(fingerprint)
+
+          void showAppNotification({
+            title: `Reminder: ${reminder.title}`,
+            body: `${reminder.time} is ready for you.`,
+            tag: `reminder-${reminder.id}-${todayKey}`,
+            url: '/japu/reminders',
+          })
+        })
     }
 
-    reminderNoticeRef.current = fingerprint
-
-    void showAppNotification({
-      title: `Reminder: ${activeReminder.title}`,
-      body: `${activeReminder.time} is ready for you.`,
-      tag: `reminder-${activeReminder.id}`,
-      url: '/japu/reminders',
-    })
+    checkReminderTimes()
+    const intervalId = window.setInterval(checkReminderTimes, 30000)
+    return () => window.clearInterval(intervalId)
   }, [currentUser, reminders, settings.notifications])
 
   useEffect(() => {

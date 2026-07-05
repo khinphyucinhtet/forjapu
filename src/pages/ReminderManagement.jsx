@@ -2,7 +2,7 @@ import { useState } from 'react'
 import AppHeader from '../components/AppHeader'
 import BottomNav from '../components/BottomNav'
 import ReminderCard from '../components/ReminderCard'
-import { senderNavItems } from '../utils/app'
+import { formatReminderTime, senderNavItems, toReminderTimeValue } from '../utils/app'
 import { addReminder, deleteReminder, updateReminder, useReminders } from '../utils/storage'
 
 const emptyDraft = {
@@ -39,7 +39,8 @@ export default function ReminderManagement() {
 
     const payload = {
       title: draft.title.trim(),
-      time: draft.time.trim(),
+      timeValue: draft.time.trim(),
+      time: formatReminderTime(draft.time.trim()),
       note: draft.note.trim(),
       active: draft.active,
     }
@@ -59,7 +60,7 @@ export default function ReminderManagement() {
     setEditingId(reminder.id)
     setDraft({
       title: reminder.title,
-      time: reminder.time,
+      time: toReminderTimeValue(reminder),
       note: reminder.note || '',
       active: reminder.active,
     })
@@ -102,9 +103,10 @@ export default function ReminderManagement() {
                   <span>Reminder time</span>
                   <input
                     name="time"
+                    type="time"
                     value={draft.time}
                     onChange={handleChange}
-                    placeholder="03:00 PM"
+                    step="60"
                   />
                 </label>
               </div>

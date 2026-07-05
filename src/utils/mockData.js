@@ -20,46 +20,16 @@ export const defaultUsers = [
 ]
 
 export const defaultReminders = [
-  { id: 'rem-1', title: 'Medicine', time: '09:00 AM', active: true },
-  { id: 'rem-2', title: 'Vitamin', time: '01:00 PM', active: true },
-  { id: 'rem-3', title: 'Medicine', time: '08:00 PM', active: true },
-  { id: 'rem-4', title: 'Good night', time: '11:00 PM', active: true },
 ]
 
-export const defaultMessages = [
-  {
-    id: 'msg-1',
-    from: 'pinky',
-    to: 'japu',
-    type: 'chat',
-    text: "Don't forget to drink water!",
-    createdAt: today,
-  },
-  {
-    id: 'msg-2',
-    from: 'japu',
-    to: 'pinky',
-    type: 'chat',
-    text: 'Thank youu! 💗',
-    createdAt: today,
-  },
-  {
-    id: 'msg-3',
-    from: 'japu',
-    to: 'pinky',
-    type: 'chat',
-    text: "I'll take my medicine now!",
-    createdAt: today,
-  },
-  {
-    id: 'msg-4',
-    from: 'pinky',
-    to: 'japu',
-    type: 'note',
-    text: "You worked hard every day. I'm proud of you! Rest well tonight 🌙💜",
-    createdAt: today,
-  },
+export const legacySampleReminders = [
+  { id: 'rem-1', title: 'Medicine', time: '09:00 AM', timeValue: '09:00', active: true },
+  { id: 'rem-2', title: 'Vitamin', time: '01:00 PM', timeValue: '13:00', active: true },
+  { id: 'rem-3', title: 'Medicine', time: '08:00 PM', timeValue: '20:00', active: true },
+  { id: 'rem-4', title: 'Good night', time: '11:00 PM', timeValue: '23:00', active: true },
 ]
+
+export const defaultMessages = []
 
 export const defaultWhiteboard = {
   drawing: '',
@@ -70,7 +40,9 @@ export const defaultWhiteboard = {
   sendCount: 0,
 }
 
-export const defaultHistory = [
+export const defaultHistory = []
+
+export const legacySampleHistory = [
   { id: 'hist-1', title: 'Medicine', time: '09:00 AM', status: 'Taken', date: today },
   { id: 'hist-2', title: 'Vitamin', time: '01:00 PM', status: 'Taken', date: today },
   { id: 'hist-3', title: 'Medicine', time: '08:00 PM', status: 'Pending', date: today },

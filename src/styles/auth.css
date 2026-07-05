@@ -312,6 +312,30 @@ textarea:focus {
   }
 }
 
+@media (max-width: 640px) {
+  .auth-shell {
+    padding: 0;
+    background: #fff;
+  }
+
+  .sky-orb {
+    display: none;
+  }
+
+  .phone-preview-card,
+  .auth-card {
+    width: 100vw;
+    min-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .auth-card {
+    max-height: none;
+  }
+}
+
 @media (max-width: 420px) {
   .login-card {
     padding: 1.9rem 1.1rem 1.3rem;
