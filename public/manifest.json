@@ -1,0 +1,38 @@
+{
+  "name": "ForJapu",
+  "short_name": "ForJapu",
+  "description": "A little reminder, every day.",
+  "theme_color": "#6C3CD9",
+  "background_color": "#F1ECFF",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "shortcuts": [
+    {
+      "name": "Reminders",
+      "short_name": "Reminders",
+      "url": "/japu/reminders",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Whiteboard",
+      "short_name": "Board",
+      "url": "/pinky/board",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    }
+  ],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

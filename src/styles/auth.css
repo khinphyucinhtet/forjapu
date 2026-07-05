@@ -1,0 +1,337 @@
+.auth-shell {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(0.75rem, 2.5vw, 1rem);
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 18%),
+    radial-gradient(circle at 85% 20%, rgba(247, 208, 229, 0.48), rgba(247, 208, 229, 0) 22%),
+    linear-gradient(180deg, #f8f5ff 0%, #e6ddff 55%, #f4e2ef 100%);
+}
+
+.sky-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(10px);
+  opacity: 0.7;
+}
+
+.orb-one {
+  width: 180px;
+  height: 180px;
+  top: -10px;
+  right: -40px;
+  background: rgba(244, 122, 181, 0.22);
+}
+
+.orb-two {
+  width: 160px;
+  height: 160px;
+  left: -30px;
+  bottom: 8%;
+  background: rgba(108, 60, 217, 0.15);
+}
+
+.phone-preview-card,
+.auth-card {
+  position: relative;
+  width: var(--app-frame-width);
+  border-radius: var(--app-frame-radius);
+  padding: 2rem 1.35rem 1.25rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.76)),
+    linear-gradient(180deg, #efe8ff 0%, #fdfaff 100%);
+  border: 1px solid rgba(108, 60, 217, 0.16);
+  box-shadow:
+    0 18px 40px rgba(124, 90, 201, 0.22),
+    inset 0 -16px 24px rgba(255, 255, 255, 0.48);
+}
+
+.phone-preview-card::after,
+.auth-card::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 120px;
+  border-radius: 0 0 var(--app-frame-radius) var(--app-frame-radius);
+  background:
+    radial-gradient(circle at 15% 80%, rgba(255, 255, 255, 0.9) 0 22%, rgba(255, 255, 255, 0) 23%),
+    radial-gradient(circle at 45% 84%, rgba(255, 255, 255, 0.95) 0 28%, rgba(255, 255, 255, 0) 29%),
+    radial-gradient(circle at 78% 72%, rgba(255, 255, 255, 0.88) 0 24%, rgba(255, 255, 255, 0) 25%);
+  pointer-events: none;
+}
+
+.splash-shell .phone-preview-card {
+  min-height: var(--app-frame-height);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 1rem;
+  text-align: center;
+}
+
+.splash-card {
+  padding-top: 2.4rem;
+}
+
+.heart-tile,
+.mini-heart-card {
+  width: 78px;
+  height: 78px;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  color: var(--pink-500);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: inset 0 -6px 10px rgba(108, 60, 217, 0.05);
+  font-size: 2rem;
+}
+
+.mini-heart-card {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1rem;
+  font-size: 1.75rem;
+}
+
+.phone-preview-card h1,
+.auth-brand h1 {
+  font-family: 'Baloo 2', cursive;
+  font-size: clamp(2rem, 5vw, 3rem);
+  line-height: 0.95;
+  color: #47308c;
+}
+
+.phone-preview-card p,
+.auth-brand p {
+  text-align: center;
+  max-width: 19rem;
+  line-height: 1.35;
+  color: var(--text-soft);
+}
+
+.splash-copy {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+}
+
+.splash-wordmark {
+  font-size: clamp(2.15rem, 7vw, 3.1rem);
+}
+
+.pulse-heart {
+  animation: pulse 1.8s ease-in-out infinite;
+}
+
+.cloud-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cloud-row span {
+  display: block;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.cloud-row span:nth-child(1) {
+  width: 46px;
+  height: 24px;
+}
+
+.cloud-row span:nth-child(2) {
+  width: 62px;
+  height: 32px;
+}
+
+.cloud-row span:nth-child(3) {
+  width: 38px;
+  height: 20px;
+}
+
+.auth-card {
+  z-index: 1;
+  display: grid;
+  gap: 1.25rem;
+  min-height: var(--app-frame-height);
+  max-width: 100%;
+  max-height: var(--app-frame-height);
+  overflow-y: auto;
+}
+
+.login-card {
+  width: var(--app-frame-width);
+  padding: 2.2rem 1.5rem 1.45rem;
+}
+
+.register-card {
+  padding-bottom: 1.6rem;
+}
+
+.auth-brand {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  display: grid;
+  justify-items: center;
+}
+
+.auth-form {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.45rem;
+  font-weight: 700;
+  color: #493c67;
+}
+
+.auth-form input,
+.auth-form select {
+  width: 100%;
+  border-radius: 16px;
+  border: 1px solid rgba(108, 60, 217, 0.14);
+  padding: 0.95rem 1rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-main);
+  box-shadow: inset 0 1px 4px rgba(108, 60, 217, 0.04);
+}
+
+.auth-form input:focus,
+.auth-form select:focus,
+.message-composer:focus,
+.whiteboard-note:focus,
+.chat-composer input:focus,
+.message-composer:focus,
+textarea:focus {
+  outline: 2px solid rgba(108, 60, 217, 0.22);
+  border-color: rgba(108, 60, 217, 0.25);
+}
+
+.auth-hint-row,
+.auth-footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.auth-footer {
+  font-weight: 700;
+}
+
+.auth-hint-row > * ,
+.auth-footer > * {
+  min-width: 0;
+}
+
+.auth-footer a,
+.auth-footer span,
+.auth-footer button {
+  white-space: normal;
+}
+
+.ghost-link {
+  padding: 0;
+  background: transparent;
+  color: #5f4ac3;
+  font-weight: 700;
+}
+
+.auth-inline-note {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  color: #8a839c;
+  font-size: 0.92rem;
+}
+
+.auth-muted-link {
+  color: #8a839c;
+  text-decoration: underline;
+  text-decoration-color: rgba(138, 131, 156, 0.75);
+  text-underline-offset: 0.16em;
+}
+
+.splash-actions {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.7rem;
+  width: 100%;
+  margin-top: 0.25rem;
+}
+
+.splash-button {
+  width: 100%;
+  text-align: center;
+}
+
+.splash-secondary {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.form-error {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(244, 122, 181, 0.12);
+  color: #af456f;
+  font-size: 0.92rem;
+}
+
+.form-info {
+  position: relative;
+  z-index: 1;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: rgba(108, 60, 217, 0.08);
+  color: #5a4b8f;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+@media (max-height: 760px) {
+  .auth-shell {
+    place-items: start center;
+  }
+}
+
+@media (max-width: 420px) {
+  .login-card {
+    padding: 1.9rem 1.1rem 1.3rem;
+  }
+
+  .auth-brand p {
+    max-width: 100%;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: inset 0 -6px 10px rgba(108, 60, 217, 0.05);
+  }
+
+  50% {
+    transform: scale(1.08);
+    box-shadow:
+      0 14px 22px rgba(244, 122, 181, 0.18),
+      inset 0 -6px 10px rgba(108, 60, 217, 0.05);
+  }
+}

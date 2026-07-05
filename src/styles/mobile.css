@@ -1,0 +1,74 @@
+@media (max-width: 420px) {
+  .auth-shell,
+  .page-shell {
+    padding: 0.75rem;
+  }
+
+  .auth-card,
+  .phone-preview-card,
+  .phone-shell {
+    width: 100%;
+  }
+
+  .quick-actions,
+  .stats-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .phone-preview-card,
+  .auth-card,
+  .phone-shell {
+    border-radius: 28px;
+  }
+
+  .app-header {
+    padding: 1rem 0.9rem;
+  }
+
+  .page-content,
+  .panel-card,
+  .chat-card,
+  .settings-card,
+  .reminder-card {
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
+  }
+
+  .split-actions > * {
+    flex-basis: 100%;
+  }
+
+  .chat-card {
+    min-height: 24rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .quick-actions,
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-hint-row,
+  .auth-footer,
+  .settings-row,
+  .history-row,
+  .calendar-header {
+    align-items: flex-start;
+  }
+
+  .calendar-date {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+@media (min-width: 768px) {
+  .page-shell {
+    padding: 2rem;
+  }
+
+  .phone-shell {
+    height: min(calc(100dvh - 4rem), 52rem);
+  }
+}
