@@ -183,6 +183,12 @@
   justify-items: center;
 }
 
+.auth-helper-copy {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: #8a839c;
+}
+
 .auth-form {
   position: relative;
   z-index: 1;

@@ -455,6 +455,11 @@
   box-shadow: inset 0 1px 4px rgba(108, 60, 217, 0.04);
 }
 
+.panel-field-readonly input {
+  background: rgba(245, 240, 255, 0.92);
+  color: var(--text-soft);
+}
+
 .panel-textarea {
   resize: vertical;
 }

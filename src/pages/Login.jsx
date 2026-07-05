@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { getRoleHome, loginUser, useCurrentUser } from '../utils/storage'
 
 export default function Login() {
@@ -44,12 +44,13 @@ export default function Login() {
         <div className="auth-brand">
           <div className="mini-heart-card">♥</div>
           <h1>ForJapu</h1>
-          <p>Sayy Hman Hman Tout Par Japu Yay</p>
+          <p>A little reminder, every day.</p>
+          <span className="auth-helper-copy">Only Pinky and Japu can access this space.</span>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            Email or Username
+            Username or Email
             <input
               name="username"
               type="text"
@@ -81,12 +82,7 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="auth-inline-note">
-          Not registered?{' '}
-          <Link className="auth-muted-link" to="/register">
-            Register here
-          </Link>
-        </p>
+        <p className="auth-inline-note">Demo hint: Pinky / 12345 or Japu / 12345</p>
       </section>
     </div>
   )

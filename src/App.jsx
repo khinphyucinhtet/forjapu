@@ -3,18 +3,19 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import AppNotificationBridge from './components/AppNotificationBridge'
 import ProtectedRoute from './components/ProtectedRoute'
 import DrawingWhiteboard from './pages/DrawingWhiteboard'
+import JapuChat from './pages/JapuChat'
 import JapuHistory from './pages/JapuHistory'
 import JapuHome from './pages/JapuHome'
 import JapuReminders from './pages/JapuReminders'
 import JapuSettings from './pages/JapuSettings'
 import JapuWhiteboard from './pages/JapuWhiteboard'
 import Login from './pages/Login'
+import PinkyChat from './pages/PinkyChat'
 import PinkyAnalytics from './pages/PinkyAnalytics'
 import PinkyDashboard from './pages/PinkyDashboard'
 import PinkySettings from './pages/PinkySettings'
 import ProfileJapu from './pages/profile_japu'
 import ProfilePinky from './pages/profile_pinky'
-import Register from './pages/Register'
 import ReminderManagement from './pages/ReminderManagement'
 import SplashScreen from './pages/SplashScreen'
 import { hydrateCurrentUser, initializeMockData } from './utils/storage'
@@ -59,7 +60,6 @@ export default function App() {
         <Route path="/" element={<SplashScreen />} />
         <Route path="/welcome" element={<SplashScreen />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
 
         <Route
           path="/pinky"
@@ -97,7 +97,7 @@ export default function App() {
           path="/pinky/chat"
           element={
             <ProtectedRoute allowedRoles={['pinky']}>
-              <Navigate to="/pinky/board" replace />
+              <PinkyChat />
             </ProtectedRoute>
           }
         />
@@ -154,7 +154,7 @@ export default function App() {
           path="/japu/chat"
           element={
             <ProtectedRoute allowedRoles={['japu']}>
-              <Navigate to="/japu/board" replace />
+              <JapuChat />
             </ProtectedRoute>
           }
         />

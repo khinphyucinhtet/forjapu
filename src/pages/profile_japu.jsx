@@ -7,7 +7,7 @@ export default function ProfileJapu() {
       theme="receiver"
       navItems={receiverNavItems}
       title="Japu profile"
-      subtitle="Update your details and keep your cozy space personal."
+      subtitle="Set the display name Japu sees across this shared reminder space."
     />
   )
 }

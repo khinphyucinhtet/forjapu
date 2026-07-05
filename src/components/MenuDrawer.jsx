@@ -7,12 +7,14 @@ export default function MenuDrawer({ isOpen, onClose, theme = 'receiver' }) {
   const user = useCurrentUser()
   const isSender = theme === 'sender'
   const homePath = isSender ? '/pinky' : '/japu'
+  const chatPath = isSender ? '/pinky/chat' : '/japu/chat'
   const profilePath = isSender ? '/pinky/profile' : '/japu/profile'
   const navigationItems = (isSender ? senderNavItems : receiverNavItems).filter(
     (item) => item.path !== homePath && item.path !== profilePath,
   )
   const drawerItems = [
     ...navigationItems,
+    { label: 'Chat', path: chatPath, icon: '✉' },
     { label: 'Profile', path: profilePath, icon: '☺' },
   ]
   const avatarLabel = String(user?.name || 'ForJapu')

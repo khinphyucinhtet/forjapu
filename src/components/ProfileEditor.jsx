@@ -7,7 +7,7 @@ export default function ProfileEditor({
   theme = 'sender',
   navItems = [],
   title = 'Profile',
-  subtitle = 'Update your name, email, and password.',
+  subtitle = 'Update the display name used in your cozy space.',
 }) {
   const user = useCurrentUser()
   const [form, setForm] = useState({
@@ -78,47 +78,25 @@ export default function ProfileEditor({
                 <input name="name" value={form.name} onChange={handleChange} placeholder="Your full name" />
               </label>
 
-              <label className="panel-field">
+              <label className="panel-field panel-field-readonly">
                 <span>Username</span>
-                <input name="username" value={form.username} onChange={handleChange} autoCapitalize="none" />
+                <input name="username" value={form.username} readOnly autoCapitalize="none" />
               </label>
 
-              <label className="panel-field">
+              <label className="panel-field panel-field-readonly">
                 <span>Email</span>
                 <input
                   name="email"
                   type="email"
                   value={form.email}
-                  onChange={handleChange}
+                  readOnly
                   autoCapitalize="none"
                   inputMode="email"
                 />
               </label>
 
-              <label className="panel-field">
-                <span>New password</span>
-                <input
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="Leave blank to keep current password"
-                />
-              </label>
-
-              <label className="panel-field">
-                <span>Confirm password</span>
-                <input
-                  name="confirmPassword"
-                  type="password"
-                  value={form.confirmPassword}
-                  onChange={handleChange}
-                  placeholder="Type again"
-                />
-              </label>
-
               <p className="helper-text">
-                If Firebase asks for a fresh login before changing email or password, log out and log in once, then save again.
+                This shared app only allows the fixed Pinky and Japu sign-ins. Username, email, and password stay locked.
               </p>
 
               {error ? <p className="form-error">{error}</p> : null}

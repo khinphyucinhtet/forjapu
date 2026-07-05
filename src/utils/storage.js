@@ -1,38 +1,88 @@
 import { useSyncExternalStore } from 'react'
 import {
-  defaultHistory,
-  legacySampleHistory,
-  defaultMessages,
-  defaultReminders,
-  defaultSettings,
-  defaultUsers,
-  defaultWhiteboard,
-  legacySampleReminders,
-} from './mockData'
+  addDoc,
+  collection,
+  db,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+} from '../firebase'
 import { formatReminderTime, toReminderTimeValue } from './app'
-import { auth, db, isFirebaseConfigured } from './firebase'
-import {
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signOut,
-  updateEmail,
-  updatePassword,
-  updateProfile,
-} from 'firebase/auth'
-import { collection, doc, getDoc, getDocs, limit, onSnapshot, query, serverTimestamp, setDoc, where } from 'firebase/firestore'
+
+const roomId = 'pinky-japu-room'
+
+const fixedUsers = [
+  {
+    id: 'pinky-user',
+    name: 'Pinky',
+    username: 'Pinky',
+    email: 'pinky@email.com',
+    password: '12345',
+    role: 'pinky',
+  },
+  {
+    id: 'japu-user',
+    name: 'Japu',
+    username: 'Japu',
+    email: 'japu@email.com',
+    password: '12345',
+    role: 'japu',
+  },
+]
+
+const defaultSettings = {
+  notifications: true,
+  vibration: true,
+  reminderSound: 'Cute chime',
+  theme: 'Role based',
+  timezone: 'GMT+8',
+  backgroundMode: true,
+  reminderCheckIn: true,
+}
+
+const defaultWhiteboardState = {
+  drawing: '',
+  textNote: '',
+  updatedAt: '',
+  updatedBy: '',
+  updatedByRole: '',
+  lastSentAt: '',
+  lastSentBy: '',
+  lastSentByName: '',
+  sendCount: 0,
+}
 
 const storageKeys = {
   currentUser: 'currentUser',
-  users: 'users',
-  reminders: 'reminders',
-  messages: 'messages',
-  whiteboardData: 'whiteboardData',
-  reminderHistory: 'reminderHistory',
-  appSettings: 'appSettings',
 }
 
-const inMemoryStore = new Map()
+const storeState = {
+  currentUser: null,
+  reminders: [],
+  messages: [],
+  whiteboardData: defaultWhiteboardState,
+  reminderHistory: [],
+  appSettings: {
+    pinky: { ...defaultSettings },
+    japu: { ...defaultSettings },
+  },
+}
+
+const storeSubscribers = new Map(
+  ['currentUser', 'reminders', 'messages', 'whiteboardData', 'reminderHistory', 'appSettings'].map((key) => [
+    key,
+    new Set(),
+  ]),
+)
+
+let messagesUnsubscribe = null
+let remindersUnsubscribe = null
+let whiteboardUnsubscribe = null
 
 function getStore() {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -40,197 +90,25 @@ function getStore() {
   }
 
   return {
-    getItem(key) {
-      return inMemoryStore.get(key) ?? null
+    getItem() {
+      return null
     },
-    setItem(key, value) {
-      inMemoryStore.set(key, value)
-    },
-    removeItem(key) {
-      inMemoryStore.delete(key)
-    },
+    setItem() {},
+    removeItem() {},
   }
-}
-
-function readJson(key, fallbackValue) {
-  const rawValue = getStore().getItem(key)
-
-  if (!rawValue) {
-    return fallbackValue
-  }
-
-  try {
-    return JSON.parse(rawValue)
-  } catch {
-    return fallbackValue
-  }
-}
-
-function writeJson(key, value) {
-  getStore().setItem(key, JSON.stringify(value))
-}
-
-function makeId(prefix) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 9)}`
 }
 
 function normalizeRole(role) {
   return role === 'pinky' ? 'pinky' : 'japu'
 }
 
-function normalizeUsername(username) {
-  return String(username || '')
-    .trim()
-    .toLowerCase()
+function normalizeUsername(value) {
+  return String(value || '').trim().toLowerCase()
 }
 
-function normalizeEmail(email) {
-  return String(email || '')
-    .trim()
-    .toLowerCase()
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase()
 }
-
-function isEmailLike(value) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeEmail(value))
-}
-
-function makeLegacyShadowEmail(username) {
-  const safeUsername = normalizeUsername(username).replace(/[^a-z0-9._-]/g, '')
-  return `${safeUsername || makeId('user')}@forjapu.app`
-}
-
-function normalizeLocalUser(user) {
-  const derivedUsername =
-    normalizeUsername(user.username) ||
-    normalizeUsername(user.name) ||
-    normalizeUsername(user.email?.split('@')[0]) ||
-    makeId('user')
-
-  return {
-    ...user,
-    name: user.name || user.username || user.email?.split('@')[0] || 'Friend',
-    email: normalizeEmail(user.email) || makeLegacyShadowEmail(derivedUsername),
-    role: normalizeRole(user.role),
-    username: derivedUsername,
-  }
-}
-
-function normalizeReminder(reminder) {
-  const timeValue = toReminderTimeValue(reminder)
-
-  return {
-    ...reminder,
-    timeValue,
-    time: reminder?.time || formatReminderTime(timeValue),
-    active: reminder?.active !== false,
-  }
-}
-
-function isLegacyReminderSeed(reminders) {
-  return (
-    Array.isArray(reminders) &&
-    reminders.length === legacySampleReminders.length &&
-    reminders.every((reminder, index) => {
-      const sample = legacySampleReminders[index]
-      return reminder?.title === sample.title && reminder?.time === sample.time
-    })
-  )
-}
-
-function isLegacyHistorySeed(history) {
-  return (
-    Array.isArray(history) &&
-    history.length === legacySampleHistory.length &&
-    history.every((entry, index) => {
-      const sample = legacySampleHistory[index]
-      return entry?.title === sample.title && entry?.time === sample.time && entry?.status === sample.status
-    })
-  )
-}
-
-function normalizeReminderCollection(reminders) {
-  if (!Array.isArray(reminders) || isLegacyReminderSeed(reminders)) {
-    return []
-  }
-
-  return reminders.map(normalizeReminder)
-}
-
-function normalizeHistoryCollection(history) {
-  if (!Array.isArray(history) || isLegacyHistorySeed(history)) {
-    return []
-  }
-
-  return history
-}
-
-const storeKeyMap = {
-  currentUser: storageKeys.currentUser,
-  users: storageKeys.users,
-  reminders: storageKeys.reminders,
-  messages: storageKeys.messages,
-  whiteboardData: storageKeys.whiteboardData,
-  reminderHistory: storageKeys.reminderHistory,
-  appSettings: storageKeys.appSettings,
-}
-
-const sharedDataKeys = ['reminders', 'messages', 'whiteboardData', 'reminderHistory', 'appSettings']
-
-function createDefaultSettingsState() {
-  return {
-    pinky: { ...defaultSettings },
-    japu: { ...defaultSettings },
-  }
-}
-
-function normalizeSettingsState(value) {
-  const fallback = createDefaultSettingsState()
-
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return fallback
-  }
-
-  const hasRoleBuckets =
-    value.pinky &&
-    typeof value.pinky === 'object' &&
-    value.japu &&
-    typeof value.japu === 'object'
-
-  if (hasRoleBuckets) {
-    return {
-      pinky: { ...defaultSettings, ...value.pinky },
-      japu: { ...defaultSettings, ...value.japu },
-    }
-  }
-
-  return {
-    pinky: { ...defaultSettings, ...value },
-    japu: { ...defaultSettings, ...value },
-  }
-}
-
-function buildInitialStoreState() {
-  return {
-    currentUser: readJson(storageKeys.currentUser, null),
-    users: readJson(storageKeys.users, defaultUsers).map(normalizeLocalUser),
-    reminders: normalizeReminderCollection(readJson(storageKeys.reminders, defaultReminders)),
-    messages: readJson(storageKeys.messages, defaultMessages),
-    whiteboardData: {
-      ...defaultWhiteboard,
-      ...readJson(storageKeys.whiteboardData, defaultWhiteboard),
-    },
-    reminderHistory: normalizeHistoryCollection(readJson(storageKeys.reminderHistory, defaultHistory)),
-    appSettings: normalizeSettingsState(readJson(storageKeys.appSettings, createDefaultSettingsState())),
-  }
-}
-
-const storeState = buildInitialStoreState()
-const storeSubscribers = new Map(
-  Object.keys(storeKeyMap).map((key) => [key, new Set()]),
-)
-
-let sharedRealtimeUnsubscribe = null
-let sharedDocSeeded = false
 
 function emitStoreUpdate(key) {
   const subscribers = storeSubscribers.get(key)
@@ -242,13 +120,8 @@ function emitStoreUpdate(key) {
   subscribers.forEach((callback) => callback())
 }
 
-function setStoreValue(key, value, options = {}) {
-  const { persistLocal = true, emit = true } = options
+function setStoreValue(key, value, emit = true) {
   storeState[key] = value
-
-  if (persistLocal) {
-    writeJson(storeKeyMap[key], value)
-  }
 
   if (emit) {
     emitStoreUpdate(key)
@@ -267,451 +140,246 @@ function useStoreValue(key) {
   )
 }
 
-function normalizeSharedData(data = {}) {
-  return {
-    reminders: normalizeReminderCollection(data.reminders ?? storeState.reminders),
-    messages: Array.isArray(data.messages) ? data.messages : storeState.messages,
-    whiteboardData: {
-      ...defaultWhiteboard,
-      ...(data.whiteboardData && typeof data.whiteboardData === 'object' ? data.whiteboardData : storeState.whiteboardData),
-    },
-    reminderHistory: normalizeHistoryCollection(data.reminderHistory ?? storeState.reminderHistory),
-    appSettings: normalizeSettingsState(data.appSettings ?? storeState.appSettings),
-  }
-}
-
-function buildSharedDataPayload(overrides = {}) {
-  return {
-    reminders: overrides.reminders ?? storeState.reminders,
-    messages: overrides.messages ?? storeState.messages,
-    whiteboardData: overrides.whiteboardData ?? storeState.whiteboardData,
-    reminderHistory: overrides.reminderHistory ?? storeState.reminderHistory,
-    appSettings: overrides.appSettings ?? storeState.appSettings,
-  }
-}
-
-function syncUserIntoLocalState(user, password) {
-  const existingUsers = getUsers()
-  const updatedUsers = existingUsers.some((entry) => entry.id === user.id)
-    ? existingUsers.map((entry) =>
-        entry.id === user.id
-          ? { ...entry, ...user, ...(password ? { password } : {}) }
-          : entry,
-      )
-    : [...existingUsers, { ...user, ...(password ? { password } : {}) }]
-
-  setStoreValue('users', updatedUsers, { persistLocal: true, emit: true })
-  setCurrentUser({ ...(getCurrentUser() || {}), ...user })
-}
-
-function findLocalUserByIdentifier(identifier) {
+function getFixedUserByIdentifier(identifier) {
   const normalizedUsername = normalizeUsername(identifier)
   const normalizedEmail = normalizeEmail(identifier)
 
-  return getUsers().find(
-    (candidate) =>
-      candidate.username === normalizedUsername || candidate.email === normalizedEmail,
+  return fixedUsers.find(
+    (user) =>
+      normalizeUsername(user.username) === normalizedUsername || normalizeEmail(user.email) === normalizedEmail,
   )
 }
 
-function syncSharedDataToStore(sharedData) {
-  sharedDataKeys.forEach((key) => {
-    setStoreValue(key, sharedData[key], { persistLocal: true, emit: true })
-  })
+function findFixedUserByRole(role) {
+  return fixedUsers.find((user) => user.role === normalizeRole(role)) || fixedUsers[1]
 }
 
-async function seedSharedDataDoc() {
-  if (!db || sharedDocSeeded) {
+function readStoredCurrentUser() {
+  const rawValue = getStore().getItem(storageKeys.currentUser)
+
+  if (!rawValue) {
+    return null
+  }
+
+  try {
+    const storedUser = JSON.parse(rawValue)
+    const fixedUser = getFixedUserByIdentifier(storedUser?.email || storedUser?.username)
+
+    if (!fixedUser) {
+      return null
+    }
+
+    return {
+      ...fixedUser,
+      name: storedUser?.name || fixedUser.name,
+    }
+  } catch {
+    return null
+  }
+}
+
+function persistCurrentUser(user) {
+  if (!user) {
+    getStore().removeItem(storageKeys.currentUser)
     return
   }
 
-  sharedDocSeeded = true
+  getStore().setItem(
+    storageKeys.currentUser,
+    JSON.stringify({
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+    }),
+  )
+}
 
-  try {
-    await setDoc(
-      doc(db, 'appState', 'shared'),
-      {
-        ...buildSharedDataPayload(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
-  } catch (error) {
-    sharedDocSeeded = false
-    console.error('Unable to seed shared app state.', error)
-  }
+function setCurrentUserInternal(user) {
+  persistCurrentUser(user)
+  setStoreValue('currentUser', user)
 }
 
 function stopRealtimeSubscriptions() {
-  if (sharedRealtimeUnsubscribe) {
-    sharedRealtimeUnsubscribe()
-    sharedRealtimeUnsubscribe = null
+  if (messagesUnsubscribe) {
+    messagesUnsubscribe()
+    messagesUnsubscribe = null
+  }
+
+  if (remindersUnsubscribe) {
+    remindersUnsubscribe()
+    remindersUnsubscribe = null
+  }
+
+  if (whiteboardUnsubscribe) {
+    whiteboardUnsubscribe()
+    whiteboardUnsubscribe = null
   }
 }
 
-function ensureRealtimeSubscriptions() {
-  if (!isFirebaseConfigured() || !db || sharedRealtimeUnsubscribe) {
-    return
+function toIsoString(value) {
+  if (!value) {
+    return ''
   }
 
-  const sharedDocRef = doc(db, 'appState', 'shared')
-
-  sharedRealtimeUnsubscribe = onSnapshot(
-    sharedDocRef,
-    async (snapshot) => {
-      if (!snapshot.exists()) {
-        await seedSharedDataDoc()
-        return
-      }
-
-      sharedDocSeeded = true
-      syncSharedDataToStore(normalizeSharedData(snapshot.data()))
-    },
-    (error) => {
-      console.error('Realtime sync failed. Falling back to local cache.', error)
-      stopRealtimeSubscriptions()
-    },
-  )
-}
-
-async function persistSharedSlice(key, value) {
-  setStoreValue(key, value, { persistLocal: true, emit: true })
-
-  if (!isFirebaseConfigured() || !db) {
+  if (typeof value === 'string') {
     return value
   }
 
-  ensureRealtimeSubscriptions()
-
-  try {
-    await setDoc(
-      doc(db, 'appState', 'shared'),
-      {
-        [key]: value,
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true },
-    )
-  } catch (error) {
-    console.error(`Unable to sync ${key} in real time.`, error)
+  if (value?.toDate) {
+    return value.toDate().toISOString()
   }
 
-  return value
+  return ''
 }
 
-function toFriendlyAuthError(error) {
-  const errorCode = error?.code
+function toDateMs(value) {
+  if (!value) {
+    return 0
+  }
 
-  switch (errorCode) {
-    case 'auth/email-already-in-use':
-      return new Error('That email is already registered.')
-    case 'auth/invalid-email':
-      return new Error('Please enter a valid email address.')
-    case 'auth/weak-password':
-      return new Error('Password should be at least 6 characters.')
-    case 'auth/requires-recent-login':
-      return new Error('Please log in again before changing your email or password.')
-    case 'auth/invalid-credential':
-    case 'auth/user-not-found':
-    case 'auth/wrong-password':
-      return new Error('Invalid email/username or password.')
-    default:
-      return error instanceof Error ? error : new Error('Something went wrong. Please try again.')
+  if (typeof value === 'string') {
+    return new Date(value).getTime()
+  }
+
+  if (value?.toDate) {
+    return value.toDate().getTime()
+  }
+
+  return 0
+}
+
+function normalizeReminder(data = {}, id) {
+  const timeValue = data.timeValue || toReminderTimeValue(data)
+
+  return {
+    id,
+    title: data.title || '',
+    timeValue,
+    time: data.time || formatReminderTime(timeValue),
+    note: data.note || '',
+    active: data.active !== false,
+    status: data.status === 'taken' ? 'taken' : 'pending',
+    createdAt: toIsoString(data.createdAt),
+    updatedAt: toIsoString(data.updatedAt),
+    takenAt: toIsoString(data.takenAt),
   }
 }
 
-async function getFirebaseProfile(uid) {
-  if (!db) {
-    return null
-  }
-
-  const profileSnapshot = await getDoc(doc(db, 'users', uid))
-  return profileSnapshot.exists() ? profileSnapshot.data() : null
+function buildReminderHistory(reminders) {
+  return reminders
+    .map((reminder) => ({
+      id: reminder.id,
+      title: reminder.title,
+      time: reminder.time,
+      status: reminder.status === 'taken' ? 'Taken' : 'Pending',
+      date: reminder.takenAt || reminder.updatedAt || reminder.createdAt || new Date().toISOString(),
+    }))
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
 }
 
-async function findFirebaseProfileByUsername(username) {
-  if (!db) {
-    return null
+function normalizeMessage(data = {}, id) {
+  return {
+    id,
+    text: data.text || '',
+    senderRole: data.senderRole || 'pinky',
+    senderName: data.senderName || 'Pinky',
+    createdAt: toIsoString(data.createdAt),
   }
-
-  const normalizedUsername = normalizeUsername(username)
-
-  if (!normalizedUsername) {
-    return null
-  }
-
-  const profileQuery = query(
-    collection(db, 'users'),
-    where('usernameLower', '==', normalizedUsername),
-    limit(1),
-  )
-  const profileSnapshot = await getDocs(profileQuery)
-
-  return profileSnapshot.empty ? null : profileSnapshot.docs[0].data()
 }
 
-async function resolveFirebaseLoginEmail(identifier) {
-  const normalizedEmail = normalizeEmail(identifier)
+function normalizeWhiteboardData(data = {}) {
+  return {
+    drawing: data.imageData || '',
+    textNote: data.textNote || '',
+    updatedAt: toIsoString(data.updatedAt),
+    updatedBy: data.updatedBy || '',
+    updatedByRole: data.updatedByRole || '',
+    lastSentAt: toIsoString(data.lastSentAt),
+    lastSentBy: data.lastSentBy || '',
+    lastSentByName: data.lastSentByName || '',
+    sendCount: Number(data.sendCount || 0),
+  }
+}
 
-  if (isEmailLike(normalizedEmail)) {
-    return normalizedEmail
+function startRealtimeSubscriptions() {
+  if (messagesUnsubscribe || remindersUnsubscribe || whiteboardUnsubscribe) {
+    return
   }
 
-  const localUser = findLocalUserByIdentifier(identifier)
+  const messagesRef = query(collection(db, 'rooms', roomId, 'messages'), orderBy('createdAt', 'asc'))
+  messagesUnsubscribe = onSnapshot(messagesRef, (snapshot) => {
+    const messages = snapshot.docs.map((messageDoc) => normalizeMessage(messageDoc.data(), messageDoc.id))
+    setStoreValue('messages', messages)
+  })
 
-  if (localUser?.email) {
-    return normalizeEmail(localUser.email)
-  }
+  const remindersRef = query(collection(db, 'rooms', roomId, 'reminders'), orderBy('createdAt', 'asc'))
+  remindersUnsubscribe = onSnapshot(remindersRef, (snapshot) => {
+    const reminders = snapshot.docs.map((reminderDoc) => normalizeReminder(reminderDoc.data(), reminderDoc.id))
+    setStoreValue('reminders', reminders)
+    setStoreValue('reminderHistory', buildReminderHistory(reminders))
+  })
 
-  try {
-    const profile = await findFirebaseProfileByUsername(identifier)
-
-    if (profile?.email) {
-      return normalizeEmail(profile.email)
+  const whiteboardRef = doc(db, 'rooms', roomId, 'whiteboard', 'current')
+  whiteboardUnsubscribe = onSnapshot(whiteboardRef, (snapshot) => {
+    if (!snapshot.exists()) {
+      setStoreValue('whiteboardData', defaultWhiteboardState)
+      return
     }
-  } catch {
-    // Fall back to the legacy username-based auth email format for older accounts.
-  }
 
-  return makeLegacyShadowEmail(identifier)
-}
-
-async function buildCurrentUserFromFirebase(firebaseUser, fallbackRole = 'japu') {
-  const profile = await getFirebaseProfile(firebaseUser.uid)
-  const currentUser = {
-    id: firebaseUser.uid,
-    name: profile?.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Friend',
-    username:
-      profile?.username ||
-      normalizeUsername(firebaseUser.displayName) ||
-      normalizeUsername(firebaseUser.email?.split('@')[0]) ||
-      'friend',
-    email: firebaseUser.email || '',
-    role: normalizeRole(profile?.role || fallbackRole),
-    authProvider: 'firebase',
-  }
-
-  syncUserIntoLocalState(currentUser)
-  ensureRealtimeSubscriptions()
-  return currentUser
+    setStoreValue('whiteboardData', normalizeWhiteboardData(snapshot.data()))
+  })
 }
 
 export function initializeMockData() {
-  const users = getStore().getItem(storageKeys.users)
-    ? readJson(storageKeys.users, defaultUsers).map(normalizeLocalUser)
-    : defaultUsers.map(normalizeLocalUser)
-
-  setStoreValue('users', users, { persistLocal: true, emit: false })
-  setStoreValue(
-    'reminders',
-    normalizeReminderCollection(
-      getStore().getItem(storageKeys.reminders) ? readJson(storageKeys.reminders, defaultReminders) : defaultReminders,
-    ),
-    { persistLocal: true, emit: false },
-  )
-  setStoreValue(
-    'messages',
-    getStore().getItem(storageKeys.messages) ? readJson(storageKeys.messages, defaultMessages) : defaultMessages,
-    { persistLocal: true, emit: false },
-  )
-  setStoreValue(
-    'whiteboardData',
-    {
-      ...defaultWhiteboard,
-      ...(getStore().getItem(storageKeys.whiteboardData)
-        ? readJson(storageKeys.whiteboardData, defaultWhiteboard)
-        : defaultWhiteboard),
-    },
-    { persistLocal: true, emit: false },
-  )
-  setStoreValue(
-    'reminderHistory',
-    normalizeHistoryCollection(
-      getStore().getItem(storageKeys.reminderHistory)
-        ? readJson(storageKeys.reminderHistory, defaultHistory)
-        : defaultHistory,
-    ),
-    { persistLocal: true, emit: false },
-  )
-  setStoreValue(
-    'appSettings',
-    normalizeSettingsState(
-      getStore().getItem(storageKeys.appSettings)
-        ? readJson(storageKeys.appSettings, createDefaultSettingsState())
-        : createDefaultSettingsState(),
-    ),
-    { persistLocal: true, emit: false },
-  )
+  setStoreValue('currentUser', readStoredCurrentUser(), false)
 }
 
-export function getUsers() {
-  return storeState.users
+export async function hydrateCurrentUser() {
+  const storedUser = readStoredCurrentUser()
+
+  if (!storedUser) {
+    stopRealtimeSubscriptions()
+    setStoreValue('currentUser', null)
+    return null
+  }
+
+  setCurrentUserInternal(storedUser)
+  startRealtimeSubscriptions()
+  return storedUser
 }
 
 export function getCurrentUser() {
   return storeState.currentUser
 }
 
-export function setCurrentUser(user) {
-  setStoreValue('currentUser', user, { persistLocal: true, emit: true })
-}
-
-export async function hydrateCurrentUser() {
-  if (!isFirebaseConfigured() || !auth) {
-    return getCurrentUser()
-  }
-
-  return new Promise((resolve) => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (firebaseUser) => {
-        unsubscribe()
-
-        if (!firebaseUser) {
-          stopRealtimeSubscriptions()
-          setStoreValue('currentUser', null, { persistLocal: false, emit: true })
-          getStore().removeItem(storageKeys.currentUser)
-          resolve(null)
-          return
-        }
-
-        resolve(await buildCurrentUserFromFirebase(firebaseUser))
-      },
-      () => {
-        unsubscribe()
-        resolve(getCurrentUser())
-      },
-    )
-  })
+export function getRoleHome(role) {
+  return normalizeRole(role) === 'pinky' ? '/pinky' : '/japu'
 }
 
 export async function loginUser({ username, password }) {
-  const identifier = String(username || '').trim()
+  const fixedUser = getFixedUserByIdentifier(username)
 
-  if (!identifier) {
-    throw new Error('Please enter your email or username.')
+  if (!fixedUser || String(password || '') !== fixedUser.password) {
+    throw new Error('Invalid username/email or password.')
   }
 
-  if (isFirebaseConfigured() && auth) {
-    try {
-      const email = await resolveFirebaseLoginEmail(identifier)
-      const credential = await signInWithEmailAndPassword(auth, email, password)
-      return buildCurrentUserFromFirebase(credential.user)
-    } catch (error) {
-      throw toFriendlyAuthError(error)
-    }
-  }
+  const rememberedUser = readStoredCurrentUser()
+  const nextUser =
+    rememberedUser && rememberedUser.role === fixedUser.role
+      ? { ...fixedUser, name: rememberedUser.name || fixedUser.name }
+      : { ...fixedUser }
 
-  const normalizedUsername = normalizeUsername(identifier)
-  const normalizedEmail = normalizeEmail(identifier)
-  const user = getUsers().find(
-    (candidate) =>
-      candidate.password === password &&
-      (candidate.username === normalizedUsername || candidate.email === normalizedEmail),
-  )
-
-  if (!user) {
-    throw new Error('Invalid email/username or password.')
-  }
-
-  setCurrentUser(user)
-  ensureRealtimeSubscriptions()
-  return user
-}
-
-export async function registerUser({ username, email, password, confirmPassword, role }) {
-  const normalizedUsername = normalizeUsername(username)
-  const normalizedEmail = normalizeEmail(email)
-  const displayName = String(username || '').trim()
-  const normalizedRole = normalizeRole(role)
-
-  if (!normalizedUsername) {
-    throw new Error('Please enter a username.')
-  }
-
-  if (!normalizedEmail) {
-    throw new Error('Please enter an email address.')
-  }
-
-  if (!isEmailLike(normalizedEmail)) {
-    throw new Error('Please enter a valid email address.')
-  }
-
-  if (String(password || '').length < 6) {
-    throw new Error('Password should be at least 6 characters.')
-  }
-
-  if (password !== confirmPassword) {
-    throw new Error('Passwords do not match.')
-  }
-
-  if (isFirebaseConfigured() && auth && db) {
-    try {
-      const existingProfile = await findFirebaseProfileByUsername(normalizedUsername).catch(() => null)
-
-      if (existingProfile) {
-        throw new Error('That username is already taken.')
-      }
-
-      const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
-      await updateProfile(credential.user, { displayName })
-      await setDoc(doc(db, 'users', credential.user.uid), {
-        uid: credential.user.uid,
-        name: displayName,
-        username: normalizedUsername,
-        usernameLower: normalizedUsername,
-        email: normalizedEmail,
-        role: normalizedRole,
-        createdAt: serverTimestamp(),
-      })
-
-      return buildCurrentUserFromFirebase(credential.user, normalizedRole)
-    } catch (error) {
-      if (error?.message === 'That username is already taken.') {
-        throw error
-      }
-
-      throw toFriendlyAuthError(error)
-    }
-  }
-
-  const users = getUsers()
-
-  if (users.some((user) => user.username === normalizedUsername)) {
-    throw new Error(
-      'That username is already taken in demo mode. Add your Firebase keys in .env.local to create real Firebase users.',
-    )
-  }
-
-  if (users.some((user) => user.email === normalizedEmail)) {
-    throw new Error(
-      'That email is already registered in demo mode. Add your Firebase keys in .env.local to create real Firebase users.',
-    )
-  }
-
-  const newUser = {
-    id: makeId('user'),
-    name: displayName,
-    username: normalizedUsername,
-    email: normalizedEmail,
-    password,
-    role: normalizedRole,
-  }
-
-  const updatedUsers = [...users, newUser]
-  setStoreValue('users', updatedUsers, { persistLocal: true, emit: true })
-  setCurrentUser(newUser)
-  return newUser
+  setCurrentUserInternal(nextUser)
+  startRealtimeSubscriptions()
+  return nextUser
 }
 
 export async function logoutUser() {
-  if (isFirebaseConfigured() && auth) {
-    await signOut(auth)
-  }
-
   stopRealtimeSubscriptions()
-  setStoreValue('currentUser', null, { persistLocal: false, emit: true })
-  getStore().removeItem(storageKeys.currentUser)
+  persistCurrentUser(null)
+  setStoreValue('currentUser', null)
 }
 
 export async function updateUserProfile({ name, username, email, password, confirmPassword }) {
@@ -721,107 +389,30 @@ export async function updateUserProfile({ name, username, email, password, confi
     throw new Error('Please log in first.')
   }
 
+  const fixedUser = findFixedUserByRole(currentUser.role)
   const displayName = String(name || '').trim()
-  const normalizedUsername = normalizeUsername(username)
-  const normalizedEmail = normalizeEmail(email)
-  const nextPassword = String(password || '')
-  const nextConfirmPassword = String(confirmPassword || '')
 
   if (!displayName) {
     throw new Error('Please enter your full name.')
   }
 
-  if (!normalizedUsername) {
-    throw new Error('Please enter a username.')
+  if (
+    normalizeUsername(username) !== normalizeUsername(fixedUser.username) ||
+    normalizeEmail(email) !== normalizeEmail(fixedUser.email)
+  ) {
+    throw new Error('Username and email are fixed for this shared app.')
   }
 
-  if (!normalizedEmail || !isEmailLike(normalizedEmail)) {
-    throw new Error('Please enter a valid email address.')
-  }
-
-  if (nextPassword || nextConfirmPassword) {
-    if (nextPassword.length < 6) {
-      throw new Error('Password should be at least 6 characters.')
-    }
-
-    if (nextPassword !== nextConfirmPassword) {
-      throw new Error('Passwords do not match.')
-    }
-  }
-
-  if (isFirebaseConfigured() && auth && db) {
-    try {
-      const currentAuthUser = auth.currentUser
-
-      if (!currentAuthUser) {
-        throw new Error('Please log in again before editing your profile.')
-      }
-
-      const existingProfile = await findFirebaseProfileByUsername(normalizedUsername).catch(() => null)
-
-      if (existingProfile?.uid && existingProfile.uid !== currentAuthUser.uid) {
-        throw new Error('That username is already taken.')
-      }
-
-      if (normalizedEmail !== normalizeEmail(currentAuthUser.email)) {
-        await updateEmail(currentAuthUser, normalizedEmail)
-      }
-
-      if (nextPassword) {
-        await updatePassword(currentAuthUser, nextPassword)
-      }
-
-      await updateProfile(currentAuthUser, { displayName })
-      await setDoc(
-        doc(db, 'users', currentAuthUser.uid),
-        {
-          uid: currentAuthUser.uid,
-          name: displayName,
-          username: normalizedUsername,
-          usernameLower: normalizedUsername,
-          email: normalizedEmail,
-          role: currentUser.role,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      )
-
-      const updatedUser = {
-        ...currentUser,
-        name: displayName,
-        username: normalizedUsername,
-        email: normalizedEmail,
-      }
-
-      syncUserIntoLocalState(updatedUser)
-      return updatedUser
-    } catch (error) {
-      if (error?.message === 'That username is already taken.') {
-        throw error
-      }
-
-      throw toFriendlyAuthError(error)
-    }
-  }
-
-  const existingUsers = getUsers()
-
-  if (existingUsers.some((user) => user.id !== currentUser.id && user.username === normalizedUsername)) {
-    throw new Error('That username is already taken.')
-  }
-
-  if (existingUsers.some((user) => user.id !== currentUser.id && user.email === normalizedEmail)) {
-    throw new Error('That email is already registered.')
+  if (password || confirmPassword) {
+    throw new Error('Password is fixed for this shared app.')
   }
 
   const updatedUser = {
-    ...currentUser,
+    ...fixedUser,
     name: displayName,
-    username: normalizedUsername,
-    email: normalizedEmail,
   }
 
-  syncUserIntoLocalState(updatedUser, nextPassword || undefined)
+  setCurrentUserInternal(updatedUser)
   return updatedUser
 }
 
@@ -829,108 +420,143 @@ export function getReminders() {
   return storeState.reminders
 }
 
-export function saveReminders(reminders) {
-  const normalizedReminders = normalizeReminderCollection(reminders)
-  void persistSharedSlice('reminders', normalizedReminders)
-  return normalizedReminders
+export async function addReminder(reminder) {
+  const remindersCollection = collection(db, 'rooms', roomId, 'reminders')
+
+  await addDoc(remindersCollection, {
+    title: String(reminder.title || '').trim(),
+    timeValue: reminder.timeValue || '',
+    time: reminder.time || formatReminderTime(reminder.timeValue),
+    note: String(reminder.note || '').trim(),
+    active: reminder.active !== false,
+    status: 'pending',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    takenAt: null,
+  })
 }
 
-export function addReminder(reminder) {
-  const updatedReminders = [...getReminders(), normalizeReminder({ id: makeId('rem'), active: true, ...reminder })]
-  saveReminders(updatedReminders)
-  return updatedReminders
+export async function updateReminder(reminderId, patch) {
+  const reminderRef = doc(db, 'rooms', roomId, 'reminders', reminderId)
+  const payload = { updatedAt: serverTimestamp() }
+
+  if ('title' in patch) {
+    payload.title = String(patch.title || '').trim()
+  }
+
+  if ('note' in patch) {
+    payload.note = String(patch.note || '').trim()
+  }
+
+  if ('active' in patch) {
+    payload.active = Boolean(patch.active)
+  }
+
+  if ('timeValue' in patch || 'time' in patch) {
+    const timeValue = patch.timeValue || toReminderTimeValue(patch)
+    payload.timeValue = timeValue
+    payload.time = patch.time || formatReminderTime(timeValue)
+  }
+
+  if ('status' in patch) {
+    payload.status = patch.status
+  }
+
+  if ('takenAt' in patch) {
+    payload.takenAt = patch.takenAt
+  }
+
+  await updateDoc(reminderRef, payload)
 }
 
-export function updateReminder(reminderId, patch) {
-  const updatedReminders = getReminders().map((reminder) =>
-    reminder.id === reminderId ? normalizeReminder({ ...reminder, ...patch }) : reminder,
-  )
-  saveReminders(updatedReminders)
-  return updatedReminders
+export async function deleteReminder(reminderId) {
+  await deleteDoc(doc(db, 'rooms', roomId, 'reminders', reminderId))
 }
 
-export function deleteReminder(reminderId) {
-  const updatedReminders = getReminders().filter((reminder) => reminder.id !== reminderId)
-  saveReminders(updatedReminders)
-  return updatedReminders
+export async function markReminderStatus(reminder, status = 'Taken') {
+  const reminderRef = doc(db, 'rooms', roomId, 'reminders', reminder.id)
+
+  if (status === 'Taken') {
+    await updateDoc(reminderRef, {
+      status: 'taken',
+      takenAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+    return
+  }
+
+  await updateDoc(reminderRef, {
+    status: 'pending',
+    takenAt: null,
+    updatedAt: serverTimestamp(),
+  })
 }
 
 export function getMessages() {
   return storeState.messages
 }
 
-export function saveMessages(messages) {
-  void persistSharedSlice('messages', messages)
-  return messages
-}
+export async function sendMessage({ text, senderRole, senderName }) {
+  const trimmedText = String(text || '').trim()
 
-export function sendMessage(message) {
-  const newMessage = {
-    id: makeId('msg'),
-    createdAt: new Date().toISOString(),
-    type: 'chat',
-    ...message,
+  if (!trimmedText) {
+    return
   }
-  const updatedMessages = [...getMessages(), newMessage]
-  saveMessages(updatedMessages)
-  return newMessage
+
+  await addDoc(collection(db, 'rooms', roomId, 'messages'), {
+    text: trimmedText,
+    senderRole,
+    senderName,
+    createdAt: serverTimestamp(),
+  })
 }
 
 export function getWhiteboardData() {
   return storeState.whiteboardData
 }
 
-export function saveWhiteboardData(data) {
+export async function saveWhiteboardData(data) {
+  const currentUser = getCurrentUser()
+  const whiteboardRef = doc(db, 'rooms', roomId, 'whiteboard', 'current')
   const payload = {
-    ...storeState.whiteboardData,
-    ...data,
-    updatedAt: new Date().toISOString(),
+    imageData: data.drawing || data.imageData || '',
+    textNote: data.textNote || '',
+    updatedBy: currentUser?.name || data.updatedBy || '',
+    updatedByRole: currentUser?.role || data.updatedByRole || '',
+    updatedAt: serverTimestamp(),
   }
-  void persistSharedSlice('whiteboardData', payload)
-  return payload
+
+  if (data.lastSentAt) {
+    payload.lastSentAt = serverTimestamp()
+    payload.lastSentBy = data.lastSentBy || currentUser?.role || ''
+    payload.lastSentByName = data.lastSentByName || currentUser?.name || ''
+    payload.sendCount = Number(data.sendCount || storeState.whiteboardData.sendCount || 0)
+  }
+
+  await setDoc(whiteboardRef, payload, { merge: true })
 }
 
 export function getReminderHistory() {
   return storeState.reminderHistory
 }
 
-export function saveReminderHistory(history) {
-  void persistSharedSlice('reminderHistory', history)
-  return history
-}
-
-export function markReminderStatus(reminder, status = 'Taken') {
-  const historyEntry = {
-    id: makeId('hist'),
-    title: reminder.title,
-    time: reminder.time,
-    status,
-    date: new Date().toISOString(),
-  }
-  const updatedHistory = [historyEntry, ...getReminderHistory()].slice(0, 30)
-  saveReminderHistory(updatedHistory)
-  return updatedHistory
-}
-
 export function getSettings() {
   const currentRole = normalizeRole(getCurrentUser()?.role)
-  const roleSettings = normalizeSettingsState(storeState.appSettings)
-  return roleSettings[currentRole]
+  return storeState.appSettings[currentRole]
 }
 
 export function saveSettings(settings, role = getCurrentUser()?.role) {
-  const normalizedRole = normalizeRole(role)
-  const payload = normalizeSettingsState(storeState.appSettings)
-  payload[normalizedRole] = {
-    ...payload[normalizedRole],
-    ...settings,
+  const nextRole = normalizeRole(role)
+  const nextSettings = {
+    ...storeState.appSettings,
+    [nextRole]: {
+      ...storeState.appSettings[nextRole],
+      ...settings,
+    },
   }
-  void persistSharedSlice('appSettings', payload)
-  return payload[normalizedRole]
-}
 
-export function getRoleHome(role) {
-  return normalizeRole(role) === 'pinky' ? '/pinky' : '/japu'
+  setStoreValue('appSettings', nextSettings)
+  return nextSettings[nextRole]
 }
 
 export function useCurrentUser() {
@@ -956,9 +582,8 @@ export function useReminderHistory() {
 export function useSettings(role) {
   const appSettings = useStoreValue('appSettings')
   const currentUser = useCurrentUser()
-  const resolvedRole = normalizeRole(role || currentUser?.role)
-  const normalizedSettings = normalizeSettingsState(appSettings)
-  return normalizedSettings[resolvedRole]
+  const nextRole = normalizeRole(role || currentUser?.role)
+  return appSettings[nextRole]
 }
 
-export { storageKeys }
+export { fixedUsers, roomId, storageKeys }

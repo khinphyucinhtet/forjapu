@@ -7,7 +7,7 @@ export default function ProfilePinky() {
       theme="sender"
       navItems={senderNavItems}
       title="Pinky profile"
-      subtitle="Edit your full name, username, email, and password."
+      subtitle="Set the display name Pinky uses inside this shared reminder space."
     />
   )
 }
