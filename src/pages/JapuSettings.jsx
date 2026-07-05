@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import BottomNav from '../components/BottomNav'
 import { receiverNavItems } from '../utils/app'
+import { canRequestNotificationPermission, getNotificationSetupHint } from '../utils/notifications'
 import { logoutUser, saveSettings, useSettings } from '../utils/storage'
 
 export default function JapuSettings() {
@@ -11,6 +12,7 @@ export default function JapuSettings() {
   const [permissionState, setPermissionState] = useState(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   )
+  const notificationHint = useMemo(() => getNotificationSetupHint(), [permissionState])
 
   function updateSettings(patch) {
     saveSettings(patch)
@@ -20,6 +22,12 @@ export default function JapuSettings() {
     if (typeof Notification === 'undefined') {
       setPermissionState('unsupported')
       updateSettings({ notifications: false })
+      return
+    }
+
+    if (!canRequestNotificationPermission()) {
+      updateSettings({ notifications: false })
+      setPermissionState(Notification.permission)
       return
     }
 
@@ -95,11 +103,9 @@ export default function JapuSettings() {
               <strong>{permissionState}</strong>
             </div>
             <button className="secondary-button full-width" onClick={requestNotifications}>
-              Enable notifications
+              {canRequestNotificationPermission() ? 'Enable notifications' : 'Add to Home Screen first'}
             </button>
-            <p className="helper-text">
-              Turn on notifications and background running, then install the app to your home screen for faster reminder access.
-            </p>
+            <p className="helper-text">{notificationHint}</p>
             <button className="ghost-button danger full-width" onClick={() => void handleLogout()}>
               Log out
             </button>

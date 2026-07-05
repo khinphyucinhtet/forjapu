@@ -57,7 +57,7 @@
 .app-header {
   position: relative;
   z-index: 2;
-  padding: 1.25rem 1rem 1.1rem;
+  padding: calc(1.25rem + env(safe-area-inset-top, 0px)) 1rem 1.1rem;
   color: var(--white);
   display: flex;
   justify-content: space-between;
@@ -1254,7 +1254,7 @@
 }
 
 .bottom-nav {
-  padding: 0.9rem 0.7rem 1rem;
+  padding: 0.9rem 0.7rem calc(1rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid rgba(108, 60, 217, 0.08);
   background: rgba(255, 255, 255, 0.9);
   display: grid;
@@ -1306,6 +1306,29 @@
   background: rgba(255, 255, 255, 0.97);
   border: 1px solid rgba(108, 60, 217, 0.12);
   box-shadow: 0 20px 44px rgba(36, 27, 58, 0.2);
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .phone-shell {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    min-height: 100dvh;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+    backdrop-filter: none;
+    background: #ffffff;
+  }
+
+  .page-content {
+    padding-bottom: calc(1.15rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .modal-card-success {

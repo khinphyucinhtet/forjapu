@@ -45,7 +45,7 @@ export default function Login() {
           <div className="mini-heart-card">♥</div>
           <h1>ForJapu</h1>
           <p>A little reminder, every day.</p>
-          <span className="auth-helper-copy">Only Pinky and Japu can access this space.</span>
+          <span className="auth-helper-copy">Only pinky and japu can access this space.</span>
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -82,7 +82,7 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="auth-inline-note">Demo hint: Pinky / 12345 or Japu / 12345</p>
+        <p className="auth-inline-note">Demo hint: pinky / 123456 or japu / 123456</p>
       </section>
     </div>
   )

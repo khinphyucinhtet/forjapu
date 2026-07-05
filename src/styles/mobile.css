@@ -1,6 +1,5 @@
 @media (max-width: 420px) {
-  .auth-shell,
-  .page-shell {
+  .auth-shell {
     padding: 0.75rem;
   }
 
@@ -16,8 +15,7 @@
   }
 
   .phone-preview-card,
-  .auth-card,
-  .phone-shell {
+  .auth-card {
     border-radius: 28px;
   }
 

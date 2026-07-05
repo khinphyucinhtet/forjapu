@@ -96,7 +96,7 @@ export default function ProfileEditor({
               </label>
 
               <p className="helper-text">
-                This shared app only allows the fixed Pinky and Japu sign-ins. Username, email, and password stay locked.
+                This shared app only allows the fixed pinky and japu sign-ins. Username, email, and password stay locked.
               </p>
 
               {error ? <p className="form-error">{error}</p> : null}

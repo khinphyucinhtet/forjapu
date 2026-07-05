@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppHeader from '../components/AppHeader'
 import BottomNav from '../components/BottomNav'
 import { senderNavItems } from '../utils/app'
+import { canRequestNotificationPermission, getNotificationSetupHint } from '../utils/notifications'
 import { logoutUser, saveSettings, useSettings } from '../utils/storage'
 
 export default function PinkySettings() {
@@ -11,6 +12,7 @@ export default function PinkySettings() {
   const [permissionState, setPermissionState] = useState(
     typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
   )
+  const notificationHint = useMemo(() => getNotificationSetupHint(), [permissionState])
 
   function updateSettings(patch) {
     saveSettings(patch)
@@ -20,6 +22,12 @@ export default function PinkySettings() {
     if (typeof Notification === 'undefined') {
       setPermissionState('unsupported')
       updateSettings({ notifications: false })
+      return
+    }
+
+    if (!canRequestNotificationPermission()) {
+      updateSettings({ notifications: false })
+      setPermissionState(Notification.permission)
       return
     }
 
@@ -82,11 +90,9 @@ export default function PinkySettings() {
               </button>
             </div>
             <button className="secondary-button full-width" onClick={requestNotifications}>
-              Request notification permission
+              {canRequestNotificationPermission() ? 'Request notification permission' : 'Add to Home Screen first'}
             </button>
-            <p className="helper-text">
-              Turn on notifications, then install the app to your home screen for the quickest reminder access.
-            </p>
+            <p className="helper-text">{notificationHint}</p>
             <button className="ghost-button danger full-width" onClick={() => void handleLogout()}>
               Log out
             </button>

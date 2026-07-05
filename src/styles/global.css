@@ -48,6 +48,12 @@ body {
   color: var(--text-main);
 }
 
+@media (max-width: 640px) {
+  body {
+    background: #ffffff;
+  }
+}
+
 img {
   max-width: 100%;
   display: block;

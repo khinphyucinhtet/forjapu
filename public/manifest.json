@@ -3,7 +3,7 @@
   "short_name": "ForJapu",
   "description": "A little reminder, every day.",
   "theme_color": "#6C3CD9",
-  "background_color": "#F1ECFF",
+  "background_color": "#FFFFFF",
   "display": "standalone",
   "start_url": "/",
   "scope": "/",

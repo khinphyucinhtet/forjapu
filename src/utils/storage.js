@@ -20,17 +20,17 @@ const fixedUsers = [
   {
     id: 'pinky-user',
     name: 'Pinky',
-    username: 'Pinky',
+    username: 'pinky',
     email: 'pinky@email.com',
-    password: '12345',
+    password: '123456',
     role: 'pinky',
   },
   {
     id: 'japu-user',
     name: 'Japu',
-    username: 'Japu',
+    username: 'japu',
     email: 'japu@email.com',
-    password: '12345',
+    password: '123456',
     role: 'japu',
   },
 ]
