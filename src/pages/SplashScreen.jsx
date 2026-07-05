@@ -20,6 +20,7 @@ export default function SplashScreen() {
       <div className="sky-orb orb-two" />
       <div className="phone-preview-card splash-card">
         <div className="splash-copy">
+          <h1 className="splash-wordmark">ForJapu</h1>
           <div className="splash-love-note">
             <h2>For Japu</h2>
             <p>Japu yay d nae lal sayy tout pr</p>
