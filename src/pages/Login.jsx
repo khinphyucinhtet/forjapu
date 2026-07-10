@@ -50,7 +50,7 @@ export default function Login() {
 
         <form className="auth-form" onSubmit={handleSubmit}>
           <label>
-            Username or Email
+            Username or Firebase Email
             <input
               name="username"
               type="text"
@@ -82,7 +82,7 @@ export default function Login() {
           </button>
         </form>
 
-        <p className="auth-inline-note">Demo hint: pinky / 123456 or japu / 123456</p>
+        <p className="auth-inline-note">Use `Pinky` or `Japu` with the real Firebase password for that account.</p>
       </section>
     </div>
   )

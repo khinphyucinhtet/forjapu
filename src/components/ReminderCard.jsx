@@ -20,6 +20,9 @@ export default function ReminderCard({
   onDelete,
   onComplete,
 }) {
+  const statusLabel =
+    reminder.status === 'completed' ? 'Taken' : reminder.status === 'cancelled' ? 'Cancelled' : reminder.active ? 'Active' : 'Paused'
+
   return (
     <article className="reminder-card">
       <div className="reminder-card-main">
@@ -34,7 +37,7 @@ export default function ReminderCard({
             <span />
           </button>
         ) : (
-          <span className="panel-chip">{reminder.active ? 'Active' : 'Paused'}</span>
+          <span className="panel-chip">{statusLabel}</span>
         )}
       </div>
 
@@ -42,7 +45,7 @@ export default function ReminderCard({
         <div className="card-actions">
           {onComplete ? (
             <button className="secondary-button" onClick={onComplete}>
-              Mark as taken
+              {reminder.status === 'completed' ? 'Mark pending' : 'Mark as taken'}
             </button>
           ) : null}
           {onEdit ? (

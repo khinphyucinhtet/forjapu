@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run src/tests/authorizedUsers.test.js",
+    "test:rules": "vitest run src/tests/firestore.rules.test.js",
+    "test:firebase": "firebase emulators:exec --only firestore \"vitest run src/tests/firestore.rules.test.js\""
   },
   "dependencies": {
     "firebase": "^12.15.0",
@@ -15,7 +18,10 @@
     "react-router-dom": "^7.7.1"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@vitejs/plugin-react": "^5.0.2",
-    "vite": "^7.1.3"
+    "firebase-tools": "^14.12.1",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4"
   }
 }

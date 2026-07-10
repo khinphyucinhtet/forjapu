@@ -1,14 +1,21 @@
+import { useState } from 'react'
 import AppHeader from '../components/AppHeader'
 import BottomNav from '../components/BottomNav'
 import ReminderCard from '../components/ReminderCard'
 import { receiverNavItems } from '../utils/app'
-import { updateReminder, useReminders } from '../utils/storage'
+import { markReminderStatus, useReminders } from '../utils/storage'
 
 export default function JapuReminders() {
   const reminders = useReminders()
+  const [error, setError] = useState('')
 
   async function toggleReminder(reminder) {
-    await updateReminder(reminder.id, { active: !reminder.active })
+    try {
+      await markReminderStatus(reminder, reminder.status === 'completed' ? 'Pending' : 'Taken')
+      setError('')
+    } catch (statusError) {
+      setError(statusError.message)
+    }
   }
 
   return (
@@ -17,11 +24,12 @@ export default function JapuReminders() {
         <AppHeader title="Reminders" theme="receiver" />
 
         <main className="page-content">
+          {error ? <p className="form-error">{error}</p> : null}
           {reminders.map((reminder) => (
             <ReminderCard
               key={reminder.id}
               reminder={reminder}
-              onToggle={() => void toggleReminder(reminder)}
+              onComplete={() => void toggleReminder(reminder)}
             />
           ))}
         </main>

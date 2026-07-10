@@ -2,8 +2,209 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /rooms/pinky-japu-room/{document=**} {
-      allow read, write: if true;
+    function pinkyUid() {
+      return "REPLACE_WITH_PINKY_FIREBASE_UID";
+    }
+
+    function japuUid() {
+      return "REPLACE_WITH_JAPU_FIREBASE_UID";
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isPinky() {
+      return isSignedIn() && request.auth.uid == pinkyUid();
+    }
+
+    function isJapu() {
+      return isSignedIn() && request.auth.uid == japuUid();
+    }
+
+    function isRealUser() {
+      return isPinky() || isJapu();
+    }
+
+    function isSharedSpace(spaceId) {
+      return spaceId == "pinky-japu";
+    }
+
+    function isAllowedSharedSpace(spaceId) {
+      return isSharedSpace(spaceId) && isRealUser();
+    }
+
+    function currentDashboardRole() {
+      return isPinky() ? "pinky" : isJapu() ? "japu" : "demo";
+    }
+
+    function currentRelationshipRole() {
+      return isPinky() ? "sender" : isJapu() ? "receiver" : "demo";
+    }
+
+    function hasOnlyKeys(data, allowedKeys) {
+      return data.keys().hasOnly(allowedKeys);
+    }
+
+    function isValidMessage() {
+      return hasOnlyKeys(request.resource.data, ["text", "senderRole", "senderName", "createdAt", "senderUid"])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.senderName is string
+        && request.resource.data.senderUid == request.auth.uid
+        && request.resource.data.senderRole == currentDashboardRole()
+        && request.resource.data.createdAt is timestamp;
+    }
+
+    function isValidReminderCreate() {
+      return hasOnlyKeys(
+          request.resource.data,
+          ["title", "message", "scheduledAt", "timeValue", "timezone", "status", "priority", "repeat", "createdBy", "assignedTo", "createdAt", "updatedAt", "completedAt"]
+        )
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.scheduledAt is timestamp
+        && request.resource.data.timeValue is string
+        && request.resource.data.timezone is string
+        && request.resource.data.status in ["pending", "cancelled"]
+        && request.resource.data.priority in ["low", "medium", "high"]
+        && request.resource.data.repeat is map
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.assignedTo == japuUid()
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.completedAt == null;
+    }
+
+    function isValidReminderPinkyUpdate() {
+      return request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.assignedTo == resource.data.assignedTo
+        && request.resource.data.title is string
+        && request.resource.data.message is string
+        && request.resource.data.scheduledAt is timestamp
+        && request.resource.data.timeValue is string
+        && request.resource.data.timezone is string
+        && request.resource.data.status in ["pending", "cancelled", "completed"]
+        && request.resource.data.priority in ["low", "medium", "high"]
+        && request.resource.data.repeat is map
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function isValidReminderJapuUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "completedAt", "updatedAt"])
+        && resource.data.assignedTo == request.auth.uid
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.assignedTo == resource.data.assignedTo
+        && request.resource.data.status in ["pending", "completed"]
+        && (request.resource.data.completedAt == null || request.resource.data.completedAt is timestamp)
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function isValidWhiteboardMetadata() {
+      return hasOnlyKeys(
+          request.resource.data,
+          [
+            "boardId",
+            "updatedAt",
+            "updatedBy",
+            "updatedByName",
+            "updatedByRole",
+            "updatedByDashboardRole",
+            "version",
+            "lastSentAt",
+            "lastSentBy",
+            "lastSentByName"
+          ]
+        )
+        && request.resource.data.boardId == "main"
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByName is string
+        && request.resource.data.updatedByRole == currentRelationshipRole()
+        && request.resource.data.updatedByDashboardRole == currentDashboardRole()
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.version is int
+        && (
+          !request.resource.data.keys().hasAny(["lastSentAt", "lastSentBy", "lastSentByName"]) ||
+          (
+            request.resource.data.lastSentAt is timestamp &&
+            request.resource.data.lastSentBy == currentDashboardRole() &&
+            request.resource.data.lastSentByName is string
+          )
+        );
+    }
+
+    function isValidWhiteboardCreate() {
+      return hasOnlyKeys(
+          request.resource.data,
+          [
+            "id",
+            "type",
+            "data",
+            "createdBy",
+            "createdByName",
+            "createdByRole",
+            "createdByDashboardRole",
+            "createdAt",
+            "updatedAt",
+            "clientCreatedAtMs",
+            "isDeleted",
+            "version"
+          ]
+        )
+        && request.resource.data.id is string
+        && request.resource.data.type in ["path", "text", "sticker", "clear"]
+        && request.resource.data.data is map
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdByRole == currentRelationshipRole()
+        && request.resource.data.createdByDashboardRole == currentDashboardRole()
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.clientCreatedAtMs is int
+        && request.resource.data.isDeleted == false
+        && request.resource.data.version == 1;
+    }
+
+    function isValidWhiteboardDelete() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(["isDeleted", "updatedAt", "version"])
+        && resource.data.createdBy == request.auth.uid
+        && request.resource.data.isDeleted is bool
+        && request.resource.data.updatedAt is timestamp
+        && request.resource.data.version is int;
+    }
+
+    match /sharedSpaces/{spaceId} {
+      allow read: if isAllowedSharedSpace(spaceId);
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAllowedSharedSpace(spaceId);
+        allow create: if isAllowedSharedSpace(spaceId) && isValidMessage();
+        allow update, delete: if false;
+      }
+
+      match /reminders/{reminderId} {
+        allow read: if isAllowedSharedSpace(spaceId);
+        allow create: if isAllowedSharedSpace(spaceId) && isPinky() && isValidReminderCreate();
+        allow update: if isAllowedSharedSpace(spaceId) && (
+          (isPinky() && isValidReminderPinkyUpdate()) ||
+          (isJapu() && isValidReminderJapuUpdate())
+        );
+        allow delete: if isAllowedSharedSpace(spaceId) && isPinky();
+      }
+
+      match /whiteboards/{boardId} {
+        allow read: if isAllowedSharedSpace(spaceId) && boardId == "main";
+        allow create, update: if isAllowedSharedSpace(spaceId) && boardId == "main" && isValidWhiteboardMetadata();
+        allow delete: if false;
+
+        match /objects/{objectId} {
+          allow read: if isAllowedSharedSpace(spaceId) && boardId == "main";
+          allow create: if isAllowedSharedSpace(spaceId) && boardId == "main" && isValidWhiteboardCreate();
+          allow update: if isAllowedSharedSpace(spaceId) && boardId == "main" && isValidWhiteboardDelete();
+          allow delete: if false;
+        }
+      }
     }
 
     match /{document=**} {

@@ -1,64 +1,40 @@
 import { useSyncExternalStore } from 'react'
+import { addDoc, collection, db, onSnapshot, orderBy, query, serverTimestamp } from '../firebase'
+import { REAL_SHARED_SPACE_ID } from '../config/authorizedUsers'
+import { loginWithFixedUser, logoutAuthUser, subscribeToAuthSession, updateAuthorizedDisplayName } from '../services/authService'
 import {
-  addDoc,
-  collection,
-  db,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from '../firebase'
-import { formatReminderTime, toReminderTimeValue } from './app'
-
-const roomId = 'pinky-japu-room'
-
-const fixedUsers = [
-  {
-    id: 'pinky-user',
-    name: 'Pinky',
-    username: 'pinky',
-    email: 'pinky@email.com',
-    password: '123456',
-    role: 'pinky',
-  },
-  {
-    id: 'japu-user',
-    name: 'Japu',
-    username: 'japu',
-    email: 'japu@email.com',
-    password: '123456',
-    role: 'japu',
-  },
-]
+  createReminder,
+  deleteReminderRecord,
+  subscribeToRealtimeReminders,
+  updateReminderCompletion,
+  updateReminderRecord,
+} from '../services/reminderService'
+import {
+  createWhiteboardObject as createRealtimeWhiteboardObject,
+  normalizeWhiteboardMetadata,
+  sendWhiteboard,
+  softDeleteWhiteboardObject as removeRealtimeWhiteboardObject,
+  subscribeToRealtimeWhiteboard,
+  touchWhiteboard,
+} from '../services/whiteboardService'
 
 const defaultSettings = {
   notifications: true,
   vibration: true,
   reminderSound: 'Cute chime',
   theme: 'Role based',
-  timezone: 'GMT+8',
+  timezone: 'Asia/Kuala_Lumpur',
   backgroundMode: true,
   reminderCheckIn: true,
 }
 
 const defaultWhiteboardState = {
-  drawing: '',
-  textNote: '',
-  updatedAt: '',
-  updatedBy: '',
-  updatedByRole: '',
-  lastSentAt: '',
-  lastSentBy: '',
-  lastSentByName: '',
-  sendCount: 0,
+  ...normalizeWhiteboardMetadata(),
+  objects: [],
 }
 
 const storageKeys = {
-  currentUser: 'currentUser',
+  appSettings: 'forjapu-app-settings',
 }
 
 const storeState = {
@@ -85,6 +61,8 @@ const storeSubscribers = new Map(
   ]),
 )
 
+let authUnsubscribe = null
+let authReadyPromise = null
 let messagesUnsubscribe = null
 let remindersUnsubscribe = null
 let whiteboardUnsubscribe = null
@@ -99,20 +77,19 @@ function getStore() {
       return null
     },
     setItem() {},
-    removeItem() {},
   }
 }
 
 function normalizeRole(role) {
+  if (role === 'sender') {
+    return 'pinky'
+  }
+
+  if (role === 'receiver') {
+    return 'japu'
+  }
+
   return role === 'pinky' ? 'pinky' : 'japu'
-}
-
-function normalizeUsername(value) {
-  return String(value || '').trim().toLowerCase()
-}
-
-function normalizeEmail(value) {
-  return String(value || '').trim().toLowerCase()
 }
 
 function emitStoreUpdate(key) {
@@ -131,18 +108,6 @@ function setStoreValue(key, value, emit = true) {
   if (emit) {
     emitStoreUpdate(key)
   }
-}
-
-function getFriendlyFirestoreMessage(error, fallbackMessage) {
-  if (error?.code === 'permission-denied') {
-    return 'Firebase permissions are blocking live sync. Publish the Firestore rules for this app to restore shared updates.'
-  }
-
-  if (error?.code === 'unavailable') {
-    return 'Live sync is temporarily unavailable. Check the internet connection and try again.'
-  }
-
-  return fallbackMessage
 }
 
 function updateSyncState(channel, message) {
@@ -164,65 +129,63 @@ function useStoreValue(key) {
   )
 }
 
-function getFixedUserByIdentifier(identifier) {
-  const normalizedUsername = normalizeUsername(identifier)
-  const normalizedEmail = normalizeEmail(identifier)
-
-  return fixedUsers.find(
-    (user) =>
-      normalizeUsername(user.username) === normalizedUsername || normalizeEmail(user.email) === normalizedEmail,
-  )
-}
-
-function findFixedUserByRole(role) {
-  return fixedUsers.find((user) => user.role === normalizeRole(role)) || fixedUsers[1]
-}
-
-function readStoredCurrentUser() {
-  const rawValue = getStore().getItem(storageKeys.currentUser)
-
-  if (!rawValue) {
-    return null
+function getFriendlyFirestoreMessage(error, fallbackMessage) {
+  if (error?.code === 'permission-denied') {
+    return 'Firebase permissions are blocking private live sync. Publish the updated Firestore rules for ForJapu.'
   }
 
-  try {
-    const storedUser = JSON.parse(rawValue)
-    const fixedUser = getFixedUserByIdentifier(storedUser?.email || storedUser?.username)
+  if (error?.code === 'unavailable') {
+    return 'Live sync is temporarily unavailable. Check the internet connection and try again.'
+  }
 
-    if (!fixedUser) {
-      return null
-    }
+  return error?.message || fallbackMessage
+}
 
-    return {
-      ...fixedUser,
-      name: storedUser?.name || fixedUser.name,
-    }
-  } catch {
-    return null
+function toIsoString(value) {
+  if (!value) {
+    return ''
+  }
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (value?.toDate) {
+    return value.toDate().toISOString()
+  }
+
+  return ''
+}
+
+function buildReminderHistory(reminders) {
+  return reminders
+    .map((reminder) => ({
+      id: reminder.id,
+      title: reminder.title,
+      time: reminder.time,
+      status: reminder.status === 'completed' ? 'Taken' : reminder.status === 'cancelled' ? 'Cancelled' : 'Pending',
+      date: reminder.completedAt || reminder.updatedAt || reminder.createdAt || new Date().toISOString(),
+    }))
+    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
+}
+
+function normalizeMessage(messageDoc) {
+  const data = messageDoc.data()
+
+  return {
+    id: messageDoc.id,
+    text: data.text || '',
+    senderRole: data.senderRole || 'pinky',
+    senderName: data.senderName || 'Pinky',
+    createdAt: toIsoString(data.createdAt),
   }
 }
 
-function persistCurrentUser(user) {
-  if (!user) {
-    getStore().removeItem(storageKeys.currentUser)
-    return
-  }
-
-  getStore().setItem(
-    storageKeys.currentUser,
-    JSON.stringify({
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      email: user.email,
-      role: user.role,
-    }),
-  )
-}
-
-function setCurrentUserInternal(user) {
-  persistCurrentUser(user)
-  setStoreValue('currentUser', user)
+function setWhiteboardState(patch) {
+  setStoreValue('whiteboardData', {
+    ...storeState.whiteboardData,
+    ...patch,
+  })
 }
 
 function stopRealtimeSubscriptions() {
@@ -242,146 +205,146 @@ function stopRealtimeSubscriptions() {
   }
 }
 
-function toIsoString(value) {
-  if (!value) {
-    return ''
-  }
-
-  if (typeof value === 'string') {
-    return value
-  }
-
-  if (value?.toDate) {
-    return value.toDate().toISOString()
-  }
-
-  return ''
-}
-
-function toDateMs(value) {
-  if (!value) {
-    return 0
-  }
-
-  if (typeof value === 'string') {
-    return new Date(value).getTime()
-  }
-
-  if (value?.toDate) {
-    return value.toDate().getTime()
-  }
-
-  return 0
-}
-
-function normalizeReminder(data = {}, id) {
-  const timeValue = data.timeValue || toReminderTimeValue(data)
-
-  return {
-    id,
-    title: data.title || '',
-    timeValue,
-    time: data.time || formatReminderTime(timeValue),
-    note: data.note || '',
-    active: data.active !== false,
-    status: data.status === 'taken' ? 'taken' : 'pending',
-    createdAt: toIsoString(data.createdAt),
-    updatedAt: toIsoString(data.updatedAt),
-    takenAt: toIsoString(data.takenAt),
-  }
-}
-
-function buildReminderHistory(reminders) {
-  return reminders
-    .map((reminder) => ({
-      id: reminder.id,
-      title: reminder.title,
-      time: reminder.time,
-      status: reminder.status === 'taken' ? 'Taken' : 'Pending',
-      date: reminder.takenAt || reminder.updatedAt || reminder.createdAt || new Date().toISOString(),
-    }))
-    .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime())
-}
-
-function normalizeMessage(data = {}, id) {
-  return {
-    id,
-    text: data.text || '',
-    senderRole: data.senderRole || 'pinky',
-    senderName: data.senderName || 'Pinky',
-    createdAt: toIsoString(data.createdAt),
-  }
-}
-
-function normalizeWhiteboardData(data = {}) {
-  return {
-    drawing: data.imageData || '',
-    textNote: data.textNote || '',
-    updatedAt: toIsoString(data.updatedAt),
-    updatedBy: data.updatedBy || '',
-    updatedByRole: data.updatedByRole || '',
-    lastSentAt: toIsoString(data.lastSentAt),
-    lastSentBy: data.lastSentBy || '',
-    lastSentByName: data.lastSentByName || '',
-    sendCount: Number(data.sendCount || 0),
-  }
-}
-
 function startRealtimeSubscriptions() {
-  if (messagesUnsubscribe || remindersUnsubscribe || whiteboardUnsubscribe) {
+  if (!storeState.currentUser || messagesUnsubscribe || remindersUnsubscribe || whiteboardUnsubscribe) {
     return
   }
 
-  const messagesRef = query(collection(db, 'rooms', roomId, 'messages'), orderBy('createdAt', 'asc'))
-  messagesUnsubscribe = onSnapshot(messagesRef, (snapshot) => {
-    const messages = snapshot.docs.map((messageDoc) => normalizeMessage(messageDoc.data(), messageDoc.id))
-    setStoreValue('messages', messages)
-    updateSyncState('messages', null)
-  }, (error) => {
-    updateSyncState('messages', getFriendlyFirestoreMessage(error, 'Messages could not sync right now.'))
-  })
+  const messagesRef = query(
+    collection(db, 'sharedSpaces', REAL_SHARED_SPACE_ID, 'messages'),
+    orderBy('createdAt', 'asc'),
+  )
 
-  const remindersRef = query(collection(db, 'rooms', roomId, 'reminders'), orderBy('createdAt', 'asc'))
-  remindersUnsubscribe = onSnapshot(remindersRef, (snapshot) => {
-    const reminders = snapshot.docs.map((reminderDoc) => normalizeReminder(reminderDoc.data(), reminderDoc.id))
-    setStoreValue('reminders', reminders)
-    setStoreValue('reminderHistory', buildReminderHistory(reminders))
-    updateSyncState('reminders', null)
-  }, (error) => {
-    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminders could not sync right now.'))
-  })
+  messagesUnsubscribe = onSnapshot(
+    messagesRef,
+    (snapshot) => {
+      setStoreValue('messages', snapshot.docs.map(normalizeMessage))
+      updateSyncState('messages', null)
+    },
+    (error) => {
+      updateSyncState('messages', getFriendlyFirestoreMessage(error, 'Messages could not sync right now.'))
+    },
+  )
 
-  const whiteboardRef = doc(db, 'rooms', roomId, 'whiteboard', 'current')
-  whiteboardUnsubscribe = onSnapshot(whiteboardRef, (snapshot) => {
-    if (!snapshot.exists()) {
-      setStoreValue('whiteboardData', defaultWhiteboardState)
+  remindersUnsubscribe = subscribeToRealtimeReminders(
+    (reminders) => {
+      setStoreValue('reminders', reminders)
+      setStoreValue('reminderHistory', buildReminderHistory(reminders))
+      updateSyncState('reminders', null)
+    },
+    (error) => {
+      updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminders could not sync right now.'))
+    },
+  )
+
+  whiteboardUnsubscribe = subscribeToRealtimeWhiteboard({
+    onMetadata(metadata) {
+      setWhiteboardState(metadata)
       updateSyncState('whiteboard', null)
-      return
-    }
-
-    setStoreValue('whiteboardData', normalizeWhiteboardData(snapshot.data()))
-    updateSyncState('whiteboard', null)
-  }, (error) => {
-    updateSyncState('whiteboard', getFriendlyFirestoreMessage(error, 'Whiteboard sync is currently unavailable.'))
+    },
+    onObjects(objects) {
+      setWhiteboardState({ objects })
+      updateSyncState('whiteboard', null)
+    },
+    onError(error) {
+      updateSyncState('whiteboard', getFriendlyFirestoreMessage(error, 'Whiteboard sync is currently unavailable.'))
+    },
   })
+}
+
+function resetRealtimeState() {
+  setStoreValue('reminders', [])
+  setStoreValue('messages', [])
+  setStoreValue('whiteboardData', defaultWhiteboardState)
+  setStoreValue('reminderHistory', [])
+  setStoreValue(
+    'syncState',
+    {
+      messages: null,
+      reminders: null,
+      whiteboard: null,
+    },
+    false,
+  )
+}
+
+function setCurrentUserInternal(user) {
+  setStoreValue('currentUser', user)
+}
+
+function ensureAuthListener() {
+  if (authUnsubscribe) {
+    return authReadyPromise || Promise.resolve(storeState.currentUser)
+  }
+
+  authReadyPromise = new Promise((resolve) => {
+    let isFirstEvent = true
+
+    authUnsubscribe = subscribeToAuthSession(({ session, error }) => {
+      if (session) {
+        setCurrentUserInternal(session)
+        startRealtimeSubscriptions()
+      } else {
+        stopRealtimeSubscriptions()
+        setCurrentUserInternal(null)
+        resetRealtimeState()
+
+        if (error) {
+          updateSyncState('messages', error)
+        }
+      }
+
+      if (isFirstEvent) {
+        isFirstEvent = false
+        resolve(session)
+      }
+    })
+  })
+
+  return authReadyPromise
+}
+
+function loadStoredSettings() {
+  const rawValue = getStore().getItem(storageKeys.appSettings)
+
+  if (!rawValue) {
+    return
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue)
+
+    setStoreValue(
+      'appSettings',
+      {
+        pinky: { ...defaultSettings, ...(parsed?.pinky || {}) },
+        japu: { ...defaultSettings, ...(parsed?.japu || {}) },
+      },
+      false,
+    )
+  } catch {
+    setStoreValue(
+      'appSettings',
+      {
+        pinky: { ...defaultSettings },
+        japu: { ...defaultSettings },
+      },
+      false,
+    )
+  }
+}
+
+function persistSettings(settings) {
+  getStore().setItem(storageKeys.appSettings, JSON.stringify(settings))
 }
 
 export function initializeMockData() {
-  setStoreValue('currentUser', readStoredCurrentUser(), false)
+  loadStoredSettings()
 }
 
 export async function hydrateCurrentUser() {
-  const storedUser = readStoredCurrentUser()
-
-  if (!storedUser) {
-    stopRealtimeSubscriptions()
-    setStoreValue('currentUser', null)
-    return null
-  }
-
-  setCurrentUserInternal(storedUser)
-  startRealtimeSubscriptions()
-  return storedUser
+  await ensureAuthListener()
+  return storeState.currentUser
 }
 
 export function getCurrentUser() {
@@ -392,28 +355,19 @@ export function getRoleHome(role) {
   return normalizeRole(role) === 'pinky' ? '/pinky' : '/japu'
 }
 
-export async function loginUser({ username, password }) {
-  const fixedUser = getFixedUserByIdentifier(username)
-
-  if (!fixedUser || String(password || '') !== fixedUser.password) {
-    throw new Error('Invalid username/email or password.')
-  }
-
-  const rememberedUser = readStoredCurrentUser()
-  const nextUser =
-    rememberedUser && rememberedUser.role === fixedUser.role
-      ? { ...fixedUser, name: rememberedUser.name || fixedUser.name }
-      : { ...fixedUser }
-
-  setCurrentUserInternal(nextUser)
+export async function loginUser(credentials) {
+  await ensureAuthListener()
+  const session = await loginWithFixedUser(credentials)
+  setCurrentUserInternal(session)
   startRealtimeSubscriptions()
-  return nextUser
+  return session
 }
 
 export async function logoutUser() {
   stopRealtimeSubscriptions()
-  persistCurrentUser(null)
-  setStoreValue('currentUser', null)
+  resetRealtimeState()
+  setCurrentUserInternal(null)
+  await logoutAuthUser()
 }
 
 export async function updateUserProfile({ name, username, email, password, confirmPassword }) {
@@ -423,27 +377,21 @@ export async function updateUserProfile({ name, username, email, password, confi
     throw new Error('Please log in first.')
   }
 
-  const fixedUser = findFixedUserByRole(currentUser.role)
-  const displayName = String(name || '').trim()
-
-  if (!displayName) {
-    throw new Error('Please enter your full name.')
-  }
-
   if (
-    normalizeUsername(username) !== normalizeUsername(fixedUser.username) ||
-    normalizeEmail(email) !== normalizeEmail(fixedUser.email)
+    String(username || '').trim().toLowerCase() !== currentUser.username ||
+    String(email || '').trim().toLowerCase() !== String(currentUser.email || '').trim().toLowerCase()
   ) {
     throw new Error('Username and email are fixed for this shared app.')
   }
 
   if (password || confirmPassword) {
-    throw new Error('Password is fixed for this shared app.')
+    throw new Error('Password stays inside Firebase Auth and cannot be changed here.')
   }
 
+  const nextDisplayName = await updateAuthorizedDisplayName(name)
   const updatedUser = {
-    ...fixedUser,
-    name: displayName,
+    ...currentUser,
+    name: nextDisplayName,
   }
 
   setCurrentUserInternal(updatedUser)
@@ -455,99 +403,44 @@ export function getReminders() {
 }
 
 export async function addReminder(reminder) {
-  const remindersCollection = collection(db, 'rooms', roomId, 'reminders')
-
   try {
-    await addDoc(remindersCollection, {
-      title: String(reminder.title || '').trim(),
-      timeValue: reminder.timeValue || '',
-      time: reminder.time || formatReminderTime(reminder.timeValue),
-      note: String(reminder.note || '').trim(),
-      active: reminder.active !== false,
-      status: 'pending',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      takenAt: null,
-    })
+    await createReminder(reminder, getCurrentUser())
   } catch (error) {
-    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder save failed.'))
-    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder save failed.'))
+    const message = getFriendlyFirestoreMessage(error, 'Reminder save failed.')
+    updateSyncState('reminders', message)
+    throw new Error(message)
   }
 }
 
 export async function updateReminder(reminderId, patch) {
-  const reminderRef = doc(db, 'rooms', roomId, 'reminders', reminderId)
-  const payload = { updatedAt: serverTimestamp() }
-
-  if ('title' in patch) {
-    payload.title = String(patch.title || '').trim()
-  }
-
-  if ('note' in patch) {
-    payload.note = String(patch.note || '').trim()
-  }
-
-  if ('active' in patch) {
-    payload.active = Boolean(patch.active)
-  }
-
-  if ('timeValue' in patch || 'time' in patch) {
-    const timeValue = patch.timeValue || toReminderTimeValue(patch)
-    payload.timeValue = timeValue
-    payload.time = patch.time || formatReminderTime(timeValue)
-  }
-
-  if ('status' in patch) {
-    payload.status = patch.status
-  }
-
-  if ('takenAt' in patch) {
-    payload.takenAt = patch.takenAt
-  }
-
   try {
-    await updateDoc(reminderRef, payload)
+    await updateReminderRecord(reminderId, patch, getCurrentUser())
   } catch (error) {
-    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder update failed.'))
-    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder update failed.'))
+    const message = getFriendlyFirestoreMessage(error, 'Reminder update failed.')
+    updateSyncState('reminders', message)
+    throw new Error(message)
   }
 }
 
 export async function deleteReminder(reminderId) {
   try {
-    await deleteDoc(doc(db, 'rooms', roomId, 'reminders', reminderId))
+    await deleteReminderRecord(reminderId, getCurrentUser())
   } catch (error) {
-    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder delete failed.'))
-    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder delete failed.'))
+    const message = getFriendlyFirestoreMessage(error, 'Reminder delete failed.')
+    updateSyncState('reminders', message)
+    throw new Error(message)
   }
 }
 
 export async function markReminderStatus(reminder, status = 'Taken') {
-  const reminderRef = doc(db, 'rooms', roomId, 'reminders', reminder.id)
-
-  if (status === 'Taken') {
-    try {
-      await updateDoc(reminderRef, {
-        status: 'taken',
-        takenAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-    } catch (error) {
-      updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
-      throw new Error(getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
-    }
-    return
-  }
+  const shouldComplete = status === 'Taken' || status === 'completed'
 
   try {
-    await updateDoc(reminderRef, {
-      status: 'pending',
-      takenAt: null,
-      updatedAt: serverTimestamp(),
-    })
+    await updateReminderCompletion(reminder.id, shouldComplete, getCurrentUser())
   } catch (error) {
-    updateSyncState('reminders', getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
-    throw new Error(getFriendlyFirestoreMessage(error, 'Reminder check-in failed.'))
+    const message = getFriendlyFirestoreMessage(error, 'Reminder check-in failed.')
+    updateSyncState('reminders', message)
+    throw new Error(message)
   }
 }
 
@@ -556,22 +449,29 @@ export function getMessages() {
 }
 
 export async function sendMessage({ text, senderRole, senderName }) {
+  const currentUser = getCurrentUser()
   const trimmedText = String(text || '').trim()
+
+  if (!currentUser) {
+    throw new Error('Please log in first.')
+  }
 
   if (!trimmedText) {
     return
   }
 
   try {
-    await addDoc(collection(db, 'rooms', roomId, 'messages'), {
+    await addDoc(collection(db, 'sharedSpaces', REAL_SHARED_SPACE_ID, 'messages'), {
       text: trimmedText,
-      senderRole,
-      senderName,
+      senderRole: senderRole || currentUser.role,
+      senderName: senderName || currentUser.name,
       createdAt: serverTimestamp(),
+      senderUid: currentUser.uid,
     })
   } catch (error) {
-    updateSyncState('messages', getFriendlyFirestoreMessage(error, 'Message send failed.'))
-    throw new Error(getFriendlyFirestoreMessage(error, 'Message send failed.'))
+    const message = getFriendlyFirestoreMessage(error, 'Message send failed.')
+    updateSyncState('messages', message)
+    throw new Error(message)
   }
 }
 
@@ -579,29 +479,43 @@ export function getWhiteboardData() {
   return storeState.whiteboardData
 }
 
-export async function saveWhiteboardData(data) {
-  const currentUser = getCurrentUser()
-  const whiteboardRef = doc(db, 'rooms', roomId, 'whiteboard', 'current')
-  const payload = {
-    imageData: data.drawing || data.imageData || '',
-    textNote: data.textNote || '',
-    updatedBy: currentUser?.name || data.updatedBy || '',
-    updatedByRole: currentUser?.role || data.updatedByRole || '',
-    updatedAt: serverTimestamp(),
-  }
-
-  if (data.lastSentAt) {
-    payload.lastSentAt = serverTimestamp()
-    payload.lastSentBy = data.lastSentBy || currentUser?.role || ''
-    payload.lastSentByName = data.lastSentByName || currentUser?.name || ''
-    payload.sendCount = Number(data.sendCount || storeState.whiteboardData.sendCount || 0)
-  }
-
+export async function createWhiteboardObject(object) {
   try {
-    await setDoc(whiteboardRef, payload, { merge: true })
+    await createRealtimeWhiteboardObject(object, getCurrentUser())
   } catch (error) {
-    updateSyncState('whiteboard', getFriendlyFirestoreMessage(error, 'Whiteboard save failed.'))
-    throw new Error(getFriendlyFirestoreMessage(error, 'Whiteboard save failed.'))
+    const message = getFriendlyFirestoreMessage(error, 'Whiteboard save failed.')
+    updateSyncState('whiteboard', message)
+    throw new Error(message)
+  }
+}
+
+export async function deleteWhiteboardObject(objectId, version) {
+  try {
+    await removeRealtimeWhiteboardObject(objectId, getCurrentUser(), version)
+  } catch (error) {
+    const message = getFriendlyFirestoreMessage(error, 'Whiteboard undo failed.')
+    updateSyncState('whiteboard', message)
+    throw new Error(message)
+  }
+}
+
+export async function saveWhiteboardData() {
+  try {
+    await touchWhiteboard(getCurrentUser())
+  } catch (error) {
+    const message = getFriendlyFirestoreMessage(error, 'Whiteboard save failed.')
+    updateSyncState('whiteboard', message)
+    throw new Error(message)
+  }
+}
+
+export async function sendWhiteboardData() {
+  try {
+    await sendWhiteboard(getCurrentUser())
+  } catch (error) {
+    const message = getFriendlyFirestoreMessage(error, 'Whiteboard send failed.')
+    updateSyncState('whiteboard', message)
+    throw new Error(message)
   }
 }
 
@@ -625,6 +539,7 @@ export function saveSettings(settings, role = getCurrentUser()?.role) {
   }
 
   setStoreValue('appSettings', nextSettings)
+  persistSettings(nextSettings)
   return nextSettings[nextRole]
 }
 
@@ -659,4 +574,4 @@ export function useSettings(role) {
   return appSettings[nextRole]
 }
 
-export { fixedUsers, roomId, storageKeys }
+export { REAL_SHARED_SPACE_ID, storageKeys }
